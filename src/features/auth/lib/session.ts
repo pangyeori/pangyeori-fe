@@ -15,7 +15,7 @@ export function clearSession() {
   sessionStorage.removeItem(USER_KEY);
 }
 
-export function persistSignUpSession(
+export function persistSignInSession(
   accessToken: string,
   user: AuthUser,
   rememberMe: boolean,

@@ -28,7 +28,7 @@ export default function HomePage() {
           ) : (
             <div className="flex items-center gap-2">
               <Link
-                href="/signup"
+                href="/signin"
                 className="rounded-lg bg-[var(--btn-primary)] px-4 py-2 text-sm font-semibold text-white"
               >
                 로그인
@@ -90,7 +90,7 @@ export default function HomePage() {
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <Link
-                href="/signup"
+                href="/signin"
                 className="inline-flex h-12 items-center justify-center rounded-lg bg-[var(--btn-primary)] px-6 text-[15px] font-semibold text-white"
               >
                 로그인

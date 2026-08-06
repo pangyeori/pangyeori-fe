@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const signUpSchema = z.object({
+export const signInSchema = z.object({
   email: z
     .string()
     .min(1, "이메일을 입력해주세요.")
@@ -15,4 +15,4 @@ export const signUpSchema = z.object({
   rememberMe: z.boolean(),
 });
 
-export type SignUpFormValues = z.infer<typeof signUpSchema>;
+export type SignInFormValues = z.infer<typeof signInSchema>;

@@ -20,7 +20,7 @@ export function useSignOut() {
     },
     onSettled: () => {
       clearAuth();
-      router.push("/signup");
+      router.push("/signin");
     },
   });
 }

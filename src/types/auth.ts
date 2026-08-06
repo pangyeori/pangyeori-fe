@@ -4,13 +4,13 @@ export type AuthUser = {
   nickname: string;
 };
 
-export type SignUpRequest = {
+export type SignInRequest = {
   email: string;
   password: string;
   rememberMe?: boolean;
 };
 
-export type SignUpResponse = {
+export type SignInResponse = {
   accessToken: string;
   user: AuthUser;
 };

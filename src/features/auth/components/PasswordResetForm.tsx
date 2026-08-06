@@ -141,7 +141,7 @@ export function PasswordResetForm() {
 
       <p className="text-center text-sm text-[var(--ink-muted)]">
         <Link
-          href="/signup"
+          href="/signin"
           className="font-semibold text-[var(--brand-blue)] underline-offset-2 hover:underline"
         >
           로그인으로 돌아가기

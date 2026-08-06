@@ -13,7 +13,7 @@ import {
   clearSession,
   getAccessToken,
   getStoredUser,
-  persistSignUpSession,
+  persistSignInSession,
 } from "@/features/auth/lib/session";
 import type { AuthUser } from "@/types/auth";
 
@@ -89,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const setSession = useCallback(
     (token: string, nextUser: AuthUser, rememberMe: boolean) => {
-      persistSignUpSession(token, nextUser, rememberMe);
+      persistSignInSession(token, nextUser, rememberMe);
       emitAuthChange();
     },
     [],
