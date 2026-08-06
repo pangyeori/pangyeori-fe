@@ -29,8 +29,8 @@ export function RegisterForm() {
 
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
-    mode: "onBlur",
-    reValidateMode: "onBlur",
+    mode: "onChange",
+    reValidateMode: "onChange",
     defaultValues: {
       nickname: "",
       email: "",
@@ -52,7 +52,9 @@ export function RegisterForm() {
   } = form;
 
   const { errors, isSubmitted } = formState;
-  const { bindFocus, errorOf, validOf } = useFieldFeedback(formState);
+  const { bindFocus, errorOf, validOf } = useFieldFeedback(formState, {
+    showWhileDirty: true,
+  });
 
   const email = watch("email");
   const nickname = watch("nickname");

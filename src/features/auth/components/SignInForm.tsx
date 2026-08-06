@@ -27,8 +27,8 @@ export function SignInForm() {
 
   const form = useForm<SignInFormValues>({
     resolver: zodResolver(signInSchema),
-    mode: "onBlur",
-    reValidateMode: "onBlur",
+    mode: "onChange",
+    reValidateMode: "onChange",
     defaultValues: {
       email: "",
       password: "",
@@ -37,7 +37,9 @@ export function SignInForm() {
   });
 
   const { register, handleSubmit, watch, formState } = form;
-  const { bindFocus, errorOf, validOf } = useFieldFeedback(formState);
+  const { bindFocus, errorOf, validOf } = useFieldFeedback(formState, {
+    showWhileDirty: true,
+  });
 
   const email = watch("email");
   const password = watch("password");
