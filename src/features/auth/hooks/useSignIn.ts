@@ -3,16 +3,16 @@
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 
-import { signUp } from "@/features/auth/api/signUp";
+import { signIn } from "@/features/auth/api/signIn";
 import { useAuth } from "@/features/auth/context/AuthProvider";
-import type { SignUpRequest } from "@/types/auth";
+import type { SignInRequest } from "@/types/auth";
 
-export function useSignUp() {
+export function useSignIn() {
   const router = useRouter();
   const { setSession } = useAuth();
 
   return useMutation({
-    mutationFn: (body: SignUpRequest) => signUp(body),
+    mutationFn: (body: SignInRequest) => signIn(body),
     onSuccess: (data, variables) => {
       setSession(data.accessToken, data.user, Boolean(variables.rememberMe));
       router.push("/");

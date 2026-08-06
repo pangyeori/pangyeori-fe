@@ -15,18 +15,18 @@ import {
 } from "@/features/auth/components/shared/AuthFormChrome";
 import { KakaoAuthButton } from "@/features/auth/components/shared/KakaoAuthButton";
 import { useFieldFeedback } from "@/features/auth/hooks/useFieldFeedback";
-import { useSignUp } from "@/features/auth/hooks/useSignUp";
+import { useSignIn } from "@/features/auth/hooks/useSignIn";
 import {
-  signUpSchema,
-  type SignUpFormValues,
-} from "@/features/auth/schemas/signUpSchema";
+  signInSchema,
+  type SignInFormValues,
+} from "@/features/auth/schemas/signInSchema";
 import { ApiError } from "@/lib/api/client";
 
-export function SignUpForm() {
-  const signUpMutation = useSignUp();
+export function SignInForm() {
+  const signInMutation = useSignIn();
 
-  const form = useForm<SignUpFormValues>({
-    resolver: zodResolver(signUpSchema),
+  const form = useForm<SignInFormValues>({
+    resolver: zodResolver(signInSchema),
     mode: "onBlur",
     reValidateMode: "onBlur",
     defaultValues: {
@@ -47,9 +47,9 @@ export function SignUpForm() {
   const passwordFocus = bindFocus("password");
 
   const serverError =
-    signUpMutation.error instanceof ApiError
-      ? signUpMutation.error.message
-      : signUpMutation.error
+    signInMutation.error instanceof ApiError
+      ? signInMutation.error.message
+      : signInMutation.error
         ? "로그인에 실패했습니다. 잠시 후 다시 시도해주세요."
         : null;
 
@@ -57,8 +57,8 @@ export function SignUpForm() {
     <form
       className="flex flex-col gap-4"
       onSubmit={handleSubmit((values) => {
-        signUpMutation.reset();
-        signUpMutation.mutate({
+        signInMutation.reset();
+        signInMutation.mutate({
           email: values.email,
           password: values.password,
           rememberMe: values.rememberMe,
@@ -120,7 +120,7 @@ export function SignUpForm() {
 
       {serverError ? <FormAlert>{serverError}</FormAlert> : null}
 
-      <Button type="submit" loading={signUpMutation.isPending}>
+      <Button type="submit" loading={signInMutation.isPending}>
         로그인
       </Button>
 

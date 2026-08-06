@@ -8,7 +8,7 @@ export default function RegisterPage() {
     <AuthLayout
       headerRight={
         <Link
-          href="/signup"
+          href="/signin"
           className="rounded-lg border border-[var(--line)] bg-white px-4 py-2 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-muted)]"
         >
           로그인

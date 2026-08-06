@@ -1,9 +1,9 @@
 import Link from "next/link";
 
 import { AuthLayout } from "@/components/layout/AuthLayout";
-import { SignUpForm } from "@/features/auth/components/SignUpForm";
+import { SignInForm } from "@/features/auth/components/SignInForm";
 
-export default function SignUpPage() {
+export default function SignInPage() {
   return (
     <AuthLayout
       headerRight={
@@ -24,7 +24,7 @@ export default function SignUpPage() {
       }
       heroDescription="로그인하여 재판에 참여하고 AI 판사의 공정한 판결을 받아보세요"
     >
-      <SignUpForm />
+      <SignInForm />
     </AuthLayout>
   );
 }
