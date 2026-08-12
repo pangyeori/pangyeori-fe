@@ -118,7 +118,6 @@ export function PasswordResetForm() {
         inputRef={emailField.ref}
         emailLabel="이메일을 입력해 주세요."
         emailPlaceholder="email@example.com"
-        confirmVariant="success"
         timerPrefix="재전송까지"
       />
 

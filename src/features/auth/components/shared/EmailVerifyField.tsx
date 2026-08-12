@@ -3,9 +3,13 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
+  type ClipboardEventHandler,
   type ChangeEventHandler,
+  type FocusEvent,
   type FocusEventHandler,
+  type KeyboardEventHandler,
   type Ref,
 } from "react";
 
@@ -33,9 +37,10 @@ type EmailVerifyFieldProps = {
   inputRef: Ref<HTMLInputElement>;
   emailLabel?: string;
   emailPlaceholder?: string;
-  confirmVariant?: "primary" | "success";
   timerPrefix?: string;
 };
+
+type PinTone = "idle" | "checking" | "success" | "error";
 
 function formatSeconds(total: number) {
   const minutes = Math.floor(total / 60);
@@ -47,12 +52,13 @@ function formatSeconds(total: number) {
 
 /**
  * 이메일 영역 헬퍼는 주 문제 하나만 표시한다.
- * 우선순위: 형식 오류 > 발송 실패 > 인증 필요 > 성공 메시지
+ * 우선순위: 형식 오류 > 발송 실패 > 인증 완료 > 발송 안내 > 인증 필요
  */
 function resolveEmailFeedback(input: {
   emailError?: string;
   sendError?: string | null;
   verifyRequiredError?: string;
+  emailValid: boolean;
   emailVerified: boolean;
   sentNotice?: string | null;
 }) {
@@ -62,9 +68,6 @@ function resolveEmailFeedback(input: {
   if (input.sendError) {
     return { tone: "error" as const, text: input.sendError };
   }
-  if (!input.emailVerified && input.verifyRequiredError) {
-    return { tone: "error" as const, text: input.verifyRequiredError };
-  }
   if (input.emailVerified) {
     return {
       tone: "success" as const,
@@ -73,6 +76,12 @@ function resolveEmailFeedback(input: {
   }
   if (input.sentNotice) {
     return { tone: "success" as const, text: input.sentNotice };
+  }
+  if (input.emailValid && !input.emailVerified) {
+    return {
+      tone: "success" as const,
+      text: input.verifyRequiredError ?? "이메일 인증을 완료해주세요.",
+    };
   }
   return null;
 }
@@ -91,10 +100,9 @@ export function EmailVerifyField({
   inputRef,
   emailLabel = "이메일",
   emailPlaceholder = "juintin@kakao.com",
-  confirmVariant = "primary",
   timerPrefix = "남은 시간",
 }: EmailVerifyFieldProps) {
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState<string[]>(() => Array(6).fill(""));
   const [sent, setSent] = useState(false);
   const [remaining, setRemaining] = useState(0);
   const [requesting, setRequesting] = useState(false);
@@ -102,6 +110,28 @@ export function EmailVerifyField({
   const [sentNotice, setSentNotice] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
   const [codeError, setCodeError] = useState<string | null>(null);
+  const [pinTone, setPinTone] = useState<PinTone>("idle");
+  const [pinExiting, setPinExiting] = useState(false);
+  const codeInputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const confirmingRef = useRef(false);
+  const currentEmailRef = useRef(email);
+  const successTimerRef = useRef<number | null>(null);
+  const exitTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    currentEmailRef.current = email;
+  }, [email]);
+
+  useEffect(() => {
+    return () => {
+      if (successTimerRef.current !== null) {
+        window.clearTimeout(successTimerRef.current);
+      }
+      if (exitTimerRef.current !== null) {
+        window.clearTimeout(exitTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (remaining <= 0) return;
@@ -112,12 +142,22 @@ export function EmailVerifyField({
   }, [remaining]);
 
   const resetVerificationUi = useCallback(() => {
+    if (successTimerRef.current !== null) {
+      window.clearTimeout(successTimerRef.current);
+      successTimerRef.current = null;
+    }
+    if (exitTimerRef.current !== null) {
+      window.clearTimeout(exitTimerRef.current);
+      exitTimerRef.current = null;
+    }
     setSent(false);
-    setCode("");
+    setCode(Array(6).fill(""));
     setRemaining(0);
     setSentNotice(null);
     setSendError(null);
     setCodeError(null);
+    setPinTone("idle");
+    setPinExiting(false);
     onVerifiedChange(false);
   }, [onVerifiedChange]);
 
@@ -129,6 +169,8 @@ export function EmailVerifyField({
   const handleRequest = useCallback(async () => {
     setSendError(null);
     setCodeError(null);
+    setPinTone("idle");
+    setPinExiting(false);
     setSentNotice(null);
 
     if (!emailValid) {
@@ -139,14 +181,21 @@ export function EmailVerifyField({
       return;
     }
 
+    const requestedEmail = email;
     setRequesting(true);
     try {
-      await requestEmailVerification(email);
+      await requestEmailVerification(requestedEmail);
+      if (currentEmailRef.current !== requestedEmail) return;
+
       setSent(true);
+      setCode(Array(6).fill(""));
       setRemaining(EMAIL_CODE_TTL_SECONDS);
       setSentNotice("인증번호를 발송했습니다. 이메일을 확인해주세요.");
       onVerifiedChange(false);
+      window.requestAnimationFrame(() => codeInputRefs.current[0]?.focus());
     } catch (err) {
+      if (currentEmailRef.current !== requestedEmail) return;
+
       setSendError(
         err instanceof ApiError
           ? err.message
@@ -157,37 +206,124 @@ export function EmailVerifyField({
     }
   }, [email, emailError, emailValid, onVerifiedChange]);
 
-  const handleConfirm = useCallback(async () => {
+  const handleConfirm = useCallback(async (completedCode: string) => {
+    if (confirmingRef.current) return;
+
+    const requestedEmail = email;
     setCodeError(null);
     setSendError(null);
-
-    if (code.trim().length !== 6) {
-      setCodeError("인증번호 6자리를 입력해주세요.");
-      return;
-    }
-
+    setPinTone("checking");
+    confirmingRef.current = true;
     setConfirming(true);
     try {
-      await confirmEmailVerification(email, code.trim());
-      onVerifiedChange(true);
+      await confirmEmailVerification(requestedEmail, completedCode);
+      if (currentEmailRef.current !== requestedEmail) return;
+
+      setPinTone("success");
       setSentNotice(null);
       setRemaining(0);
+      successTimerRef.current = window.setTimeout(() => {
+        setPinExiting(true);
+        successTimerRef.current = null;
+        exitTimerRef.current = window.setTimeout(() => {
+          if (currentEmailRef.current === requestedEmail) {
+            onVerifiedChange(true);
+          }
+          exitTimerRef.current = null;
+        }, 300);
+      }, 450);
     } catch (err) {
+      if (currentEmailRef.current !== requestedEmail) return;
+
       onVerifiedChange(false);
+      setPinTone("error");
       setCodeError(
         err instanceof ApiError
           ? err.message
           : "인증번호 확인에 실패했습니다.",
       );
     } finally {
+      confirmingRef.current = false;
       setConfirming(false);
     }
-  }, [code, email, onVerifiedChange]);
+  }, [email, onVerifiedChange]);
+
+  const updateCode = useCallback(
+    (nextCode: string[], focusIndex?: number) => {
+      setCode(nextCode);
+      setCodeError(null);
+      setPinTone("idle");
+
+      if (focusIndex !== undefined) {
+        codeInputRefs.current[focusIndex]?.focus();
+      }
+
+      const completedCode = nextCode.join("");
+      if (completedCode.length === 6) {
+        void handleConfirm(completedCode);
+      }
+    },
+    [handleConfirm],
+  );
+
+  const handleCodeChange = useCallback(
+    (index: number, value: string) => {
+      const digit = value.replace(/\D/g, "").slice(-1);
+      const nextCode = [...code];
+      nextCode[index] = digit;
+      updateCode(nextCode, digit && index < 5 ? index + 1 : undefined);
+    },
+    [code, updateCode],
+  );
+
+  const handleCodeKeyDown = useCallback(
+    (index: number): KeyboardEventHandler<HTMLInputElement> =>
+      (event) => {
+        if (event.key === "Backspace" && !code[index] && index > 0) {
+          const nextCode = [...code];
+          nextCode[index - 1] = "";
+          updateCode(nextCode, index - 1);
+        }
+      },
+    [code, updateCode],
+  );
+
+  const handleCodePaste: ClipboardEventHandler<HTMLInputElement> = useCallback(
+    (event) => {
+      const digits = event.clipboardData
+        .getData("text")
+        .replace(/\D/g, "")
+        .slice(0, 6);
+      if (!digits) return;
+
+      event.preventDefault();
+      const nextCode = Array.from({ length: 6 }, (_, index) =>
+        digits[index] ?? "",
+      );
+      updateCode(nextCode, Math.min(digits.length, 5));
+    },
+    [updateCode],
+  );
+
+  const handleCodeFocus = useCallback(
+    (index: number, event: FocusEvent<HTMLInputElement>) => {
+      if (index === 0 && pinTone === "error") {
+        setCode(Array(6).fill(""));
+        setCodeError(null);
+        setPinTone("idle");
+        return;
+      }
+
+      event.currentTarget.select();
+    },
+    [pinTone],
+  );
 
   const emailFeedback = resolveEmailFeedback({
     emailError,
     sendError,
     verifyRequiredError,
+    emailValid,
     emailVerified,
     sentNotice,
   });
@@ -210,6 +346,8 @@ export function EmailVerifyField({
         successMessage={
           emailFeedback?.tone === "success" ? emailFeedback.text : undefined
         }
+        disabled={emailVerified}
+        className="disabled:cursor-not-allowed disabled:bg-[var(--surface-muted)] disabled:text-[var(--ink-muted)]"
         trailing={
           <Button
             type="button"
@@ -230,43 +368,56 @@ export function EmailVerifyField({
       />
 
       {sent && !emailVerified ? (
-        <div className="flex flex-col gap-2">
-          <div className="flex gap-2">
-            <input
-              value={code}
-              onChange={(event) => {
-                setCode(event.target.value.replace(/\D/g, "").slice(0, 6));
-                setCodeError(null);
-              }}
-              inputMode="numeric"
-              maxLength={6}
-              placeholder="인증번호 6자리"
-              className={`h-12 min-w-0 flex-1 rounded-lg border bg-white px-3.5 text-[15px] outline-none focus:ring-2 ${
-                codeError
-                  ? "border-[var(--danger)] focus:ring-[var(--danger-soft)]"
-                  : "border-[var(--line)] focus:border-[var(--brand-blue)] focus:ring-[var(--brand-blue-soft)]"
-              }`}
-              aria-invalid={Boolean(codeError)}
-              aria-label="이메일 인증번호"
-            />
-            <Button
-              type="button"
-              variant={confirmVariant}
-              className="!h-12 !w-auto shrink-0 px-4"
-              loading={confirming}
-              onClick={handleConfirm}
-            >
-              확인
-            </Button>
+        <div
+          className={`${pinExiting ? "pin-field-exit" : "pin-field-enter"} flex flex-col gap-2`}
+          aria-live="polite"
+        >
+          <div className="grid grid-cols-6 gap-2">
+            {code.map((digit, index) => (
+              <input
+                key={index}
+                ref={(element) => {
+                  codeInputRefs.current[index] = element;
+                }}
+                value={digit}
+                onChange={(event) => handleCodeChange(index, event.target.value)}
+                onKeyDown={handleCodeKeyDown(index)}
+                onPaste={handleCodePaste}
+                onFocus={(event) => handleCodeFocus(index, event)}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={1}
+                disabled={confirming || pinTone === "success"}
+                className={`h-12 min-w-0 rounded-lg border text-center text-lg font-semibold outline-none transition-[border-color,background-color,color] duration-300 focus:ring-1 disabled:cursor-wait ${
+                  pinTone === "success"
+                    ? "border-[var(--success)] bg-[var(--success-bg)] text-[var(--success-fg)]"
+                    : pinTone === "error"
+                      ? "border-[var(--danger)] bg-[var(--danger-bg)] text-[var(--danger)] focus:ring-0"
+                      : pinTone === "checking"
+                        ? "border-[var(--success)] bg-[var(--success-bg)] text-[var(--success-fg)]"
+                        : "border-[var(--line)] bg-white text-[var(--ink)] focus:border-[var(--brand-blue)] focus:ring-[var(--brand-blue-soft)]"
+                }`}
+                aria-invalid={Boolean(codeError)}
+                aria-label={`이메일 인증번호 ${index + 1}번째 자리`}
+              />
+            ))}
           </div>
-          {codeError ? (
+          {pinTone === "success" ? (
+            <p className="text-xs font-medium text-[var(--success-fg)]" role="status">
+              인증번호가 확인되었습니다.
+            </p>
+          ) : codeError ? (
             <p className="text-xs text-[var(--danger)]" role="alert">
-              {codeError}
+              {codeError} 처음 칸을 누르면 다시 입력할 수 있습니다.
             </p>
           ) : (
             <p className="text-xs text-[var(--ink-muted)]">
-              {timerPrefix} {formatSeconds(remaining)}
-              {remaining === 0 ? " · 만료되었습니다. 재전송해주세요." : ""}
+              {confirming
+                ? "인증번호를 확인하고 있습니다."
+                : `${timerPrefix} ${formatSeconds(remaining)}`}
+              {!confirming && remaining === 0
+                ? " · 만료되었습니다. 재전송해주세요."
+                : ""}
             </p>
           )}
         </div>
