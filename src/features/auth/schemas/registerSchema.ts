@@ -1,16 +1,19 @@
 import { z } from "zod";
 
+export const nicknameSchema = z
+  .string()
+  .min(1, "닉네임을 입력해주세요.")
+  .min(2, "닉네임은 2~12자로 입력해주세요.")
+  .max(12, "닉네임은 2~12자로 입력해주세요.")
+  .regex(
+    /^[A-Za-z0-9가-힣]+$/,
+    "닉네임에는 특수문자를 사용할 수 없습니다.",
+  );
+
 export const registerSchema = z
   .object({
-    nickname: z
-      .string()
-      .min(1, "닉네임을 입력해주세요.")
-      .min(2, "닉네임은 2~12자로 입력해주세요.")
-      .max(12, "닉네임은 2~12자로 입력해주세요.")
-      .regex(
-        /^[A-Za-z0-9가-힣]+$/,
-        "닉네임에는 특수문자를 사용할 수 없습니다.",
-      ),
+    nickname: nicknameSchema,
+    nicknameChecked: z.boolean(),
     email: z
       .string()
       .min(1, "이메일을 입력해주세요.")
@@ -27,6 +30,10 @@ export const registerSchema = z
     agreePrivacy: z.boolean(),
     agreeMarketing: z.boolean(),
     emailVerified: z.boolean(),
+  })
+  .refine((data) => data.nicknameChecked, {
+    message: "닉네임 중복 확인을 완료해주세요.",
+    path: ["nickname"],
   })
   .refine((data) => data.password === data.passwordConfirm, {
     message: "비밀번호가 일치하지 않습니다.",

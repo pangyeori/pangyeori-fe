@@ -12,7 +12,7 @@ export function useRegister() {
   return useMutation({
     mutationFn: (body: RegisterRequest) => register(body),
     onSuccess: () => {
-      router.push("/signin");
+      router.replace("/register/complete");
     },
   });
 }

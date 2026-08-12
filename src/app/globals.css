@@ -55,9 +55,90 @@ body {
   }
 }
 
+.pin-field-enter {
+  overflow: hidden;
+  transform-origin: top;
+  animation: pin-field-reveal 0.3s ease-out both;
+}
+
+@keyframes pin-field-reveal {
+  from {
+    max-height: 0;
+    opacity: 0;
+    transform: translateY(-6px) scaleY(0.96);
+  }
+  to {
+    max-height: 120px;
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+}
+
+.pin-field-exit {
+  overflow: hidden;
+  transform-origin: top;
+  animation: pin-field-hide 0.3s ease-in both;
+}
+
+@keyframes pin-field-hide {
+  from {
+    max-height: 120px;
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+  to {
+    max-height: 0;
+    opacity: 0;
+    transform: translateY(-6px) scaleY(0.96);
+  }
+}
+
+.confetti-piece {
+  position: fixed;
+  top: -24px;
+  z-index: 50;
+  width: 9px;
+  height: 16px;
+  border-radius: 2px;
+  pointer-events: none;
+  animation: confetti-fall 3s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+
+.confetti-piece:nth-child(3n + 1) {
+  --confetti-shift: -90px;
+}
+
+.confetti-piece:nth-child(3n + 2) {
+  --confetti-shift: 70px;
+}
+
+.confetti-piece:nth-child(3n) {
+  --confetti-shift: 20px;
+}
+
+@keyframes confetti-fall {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, -5vh, 0) rotate(0deg);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--confetti-shift), 105vh, 0) rotate(720deg);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .auth-enter,
-  .auth-enter-delay {
+  .auth-enter-delay,
+  .pin-field-enter,
+  .pin-field-exit {
     animation: none;
+  }
+
+  .confetti-piece {
+    display: none;
   }
 }
