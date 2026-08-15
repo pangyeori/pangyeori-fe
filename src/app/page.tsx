@@ -8,7 +8,7 @@ import { useAuth } from "@/features/auth/context/AuthProvider";
 import { useSignOut } from "@/features/auth/hooks/useSignOut";
 
 export default function HomePage() {
-  const { user, isReady, isAuthenticated } = useAuth();
+  const { isReady, isAuthenticated } = useAuth();
   const signOutMutation = useSignOut();
 
   return (
@@ -51,28 +51,18 @@ export default function HomePage() {
 
         {!isReady ? (
           <p className="mt-6 text-[var(--ink-muted)]">세션 확인 중…</p>
-        ) : isAuthenticated && user ? (
+        ) : isAuthenticated ? (
           <div className="mt-8 rounded-2xl border border-[var(--line)] bg-white p-7 shadow-[0_12px_40px_rgba(16,24,40,0.08)]">
             <p className="text-sm font-semibold text-[var(--success-fg)]">
               로그인 성공
             </p>
             <h1 className="mt-2 text-2xl font-bold text-[var(--ink)]">
-              {user.nickname}님, 환영합니다
+              판겨리에 로그인했습니다
             </h1>
-            <dl className="mt-5 space-y-2 text-sm text-[var(--ink-muted)]">
-              <div className="flex gap-3">
-                <dt className="w-16 shrink-0 font-medium text-[var(--ink)]">
-                  이메일
-                </dt>
-                <dd>{user.email}</dd>
-              </div>
-              <div className="flex gap-3">
-                <dt className="w-16 shrink-0 font-medium text-[var(--ink)]">
-                  닉네임
-                </dt>
-                <dd>{user.nickname}</dd>
-              </div>
-            </dl>
+            <p className="mt-4 text-sm leading-relaxed text-[var(--ink-muted)]">
+              인증 세션이 활성화되었습니다. 사용자 프로필 API가 제공되면 계정
+              정보를 이곳에 표시할 수 있습니다.
+            </p>
             <Button
               type="button"
               className="mt-6"

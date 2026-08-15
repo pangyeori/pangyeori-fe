@@ -113,6 +113,7 @@ export async function apiClient<T>(
     response = await fetch(`${getBaseUrl()}${path}`, {
       method,
       headers,
+      credentials: "include",
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {

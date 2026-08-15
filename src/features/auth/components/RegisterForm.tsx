@@ -1,8 +1,13 @@
 "use client";
+"use no memo";
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useCallback, useState, type ChangeEventHandler } from "react";
-import { useForm, type SubmitErrorHandler } from "react-hook-form";
+import {
+  useForm,
+  useWatch,
+  type SubmitErrorHandler,
+} from "react-hook-form";
 
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -56,7 +61,6 @@ export function RegisterForm() {
     setError,
     setFocus,
     setValue,
-    watch,
     formState,
   } = form;
 
@@ -65,15 +69,30 @@ export function RegisterForm() {
     showWhileDirty: true,
   });
 
-  const email = watch("email");
-  const nickname = watch("nickname");
-  const nicknameChecked = watch("nicknameChecked");
-  const password = watch("password");
-  const passwordConfirm = watch("passwordConfirm");
-  const emailVerified = watch("emailVerified");
-  const agreeService = watch("agreeService");
-  const agreePrivacy = watch("agreePrivacy");
-  const agreeMarketing = watch("agreeMarketing");
+  const [
+    email,
+    nickname,
+    nicknameChecked,
+    password,
+    passwordConfirm,
+    emailVerified,
+    agreeService,
+    agreePrivacy,
+    agreeMarketing,
+  ] = useWatch({
+    control: form.control,
+    name: [
+      "email",
+      "nickname",
+      "nicknameChecked",
+      "password",
+      "passwordConfirm",
+      "emailVerified",
+      "agreeService",
+      "agreePrivacy",
+      "agreeMarketing",
+    ],
+  });
 
   const onVerifiedChange = useCallback(
     (verified: boolean) => {
@@ -150,10 +169,11 @@ export function RegisterForm() {
         ? "회원가입에 실패했습니다. 잠시 후 다시 시도해주세요."
         : null;
 
-  const emailField = register("email");
-  const nicknameField = register("nickname");
-  const passwordField = register("password");
-  const passwordConfirmField = register("passwordConfirm");
+  const { ref: emailRef, ...emailField } = register("email");
+  const { ref: nicknameRef, ...nicknameField } = register("nickname");
+  const { ref: passwordRef, ...passwordField } = register("password");
+  const { ref: passwordConfirmRef, ...passwordConfirmField } =
+    register("passwordConfirm");
   const nicknameFocus = bindFocus("nickname");
   const emailFocus = bindFocus("email");
   const passwordFocus = bindFocus("password");
@@ -239,7 +259,7 @@ export function RegisterForm() {
           void nicknameField.onBlur(event);
         }}
         onFocus={nicknameFocus.onFocus}
-        ref={nicknameField.ref}
+        ref={nicknameRef}
       />
 
       <EmailVerifyField
@@ -260,7 +280,7 @@ export function RegisterForm() {
           emailField.onBlur(event);
         }}
         onFocus={emailFocus.onFocus}
-        inputRef={emailField.ref}
+        inputRef={emailRef}
       />
 
       <PasswordInput
@@ -276,7 +296,7 @@ export function RegisterForm() {
           void passwordField.onBlur(event);
         }}
         onFocus={passwordFocus.onFocus}
-        ref={passwordField.ref}
+        ref={passwordRef}
       />
 
       <PasswordInput
@@ -292,7 +312,7 @@ export function RegisterForm() {
           void passwordConfirmField.onBlur(event);
         }}
         onFocus={passwordConfirmFocus.onFocus}
-        ref={passwordConfirmField.ref}
+        ref={passwordConfirmRef}
       />
 
       <TermsAgreement

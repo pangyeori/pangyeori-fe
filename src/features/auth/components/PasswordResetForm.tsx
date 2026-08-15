@@ -1,10 +1,11 @@
 "use client";
+"use no memo";
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import Link from "next/link";
 import { useCallback, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/Button";
@@ -46,12 +47,12 @@ export function PasswordResetForm() {
     },
   });
 
-  const { register, handleSubmit, setValue, watch, formState } = form;
+  const { register, handleSubmit, setValue, formState } = form;
   const { isSubmitted } = formState;
   const { bindFocus, errorOf, validOf } = useFieldFeedback(formState);
 
-  const email = watch("email");
-  const emailField = register("email");
+  const email = useWatch({ control: form.control, name: "email" });
+  const { ref: emailRef, ...emailField } = register("email");
   const emailFocus = bindFocus("email");
 
   const onVerifiedChange = useCallback(
@@ -115,7 +116,7 @@ export function PasswordResetForm() {
           emailField.onBlur(event);
         }}
         onFocus={emailFocus.onFocus}
-        inputRef={emailField.ref}
+        inputRef={emailRef}
         emailLabel="이메일을 입력해 주세요."
         emailPlaceholder="email@example.com"
         timerPrefix="재전송까지"

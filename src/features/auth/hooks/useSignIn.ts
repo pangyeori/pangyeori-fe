@@ -13,8 +13,8 @@ export function useSignIn() {
 
   return useMutation({
     mutationFn: (body: SignInRequest) => signIn(body),
-    onSuccess: (data, variables) => {
-      setSession(data.accessToken, data.user, Boolean(variables.rememberMe));
+    onSuccess: (data) => {
+      setSession(data);
       router.push("/");
     },
   });

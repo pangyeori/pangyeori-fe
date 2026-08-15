@@ -4,111 +4,113 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
-  useSyncExternalStore,
+  useRef,
+  useState,
   type ReactNode,
 } from "react";
 
-import {
-  clearSession,
-  getAccessToken,
-  getStoredUser,
-  persistSignInSession,
-} from "@/features/auth/lib/session";
-import type { AuthUser } from "@/types/auth";
-
-const AUTH_EVENT = "pangyeori-auth";
+import { refreshAccessToken } from "@/features/auth/api/refresh";
+import type { SignInResponse } from "@/types/auth";
 
 type AuthSnapshot = {
-  user: AuthUser | null;
   accessToken: string | null;
+  tokenType: string;
+  accessTokenExpiresAt: number | null;
 };
 
 type AuthContextValue = AuthSnapshot & {
   isReady: boolean;
   isAuthenticated: boolean;
-  setSession: (
-    accessToken: string,
-    user: AuthUser,
-    rememberMe: boolean,
-  ) => void;
+  setSession: (session: SignInResponse) => void;
   clearAuth: () => void;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const SERVER_SNAPSHOT: AuthSnapshot = { user: null, accessToken: null };
+const EMPTY_SESSION: AuthSnapshot = {
+  accessToken: null,
+  tokenType: "Bearer",
+  accessTokenExpiresAt: null,
+};
 
-let cachedClientSnapshot: AuthSnapshot = SERVER_SNAPSHOT;
+let bootstrapRequest: Promise<SignInResponse> | null = null;
 
-function subscribe(onStoreChange: () => void) {
-  const handler = () => onStoreChange();
-  window.addEventListener(AUTH_EVENT, handler);
-  window.addEventListener("storage", handler);
-  return () => {
-    window.removeEventListener(AUTH_EVENT, handler);
-    window.removeEventListener("storage", handler);
+function requestBootstrapSession() {
+  bootstrapRequest ??= refreshAccessToken().finally(() => {
+    bootstrapRequest = null;
+  });
+  return bootstrapRequest;
+}
+
+function toSnapshot(session: SignInResponse): AuthSnapshot {
+  return {
+    accessToken: session.accessToken,
+    tokenType: session.tokenType,
+    accessTokenExpiresAt: Date.now() + session.accessTokenExpiresIn * 1000,
   };
 }
 
-function sameUser(a: AuthUser | null, b: AuthUser | null) {
-  if (a === b) return true;
-  if (!a || !b) return false;
-  return a.id === b.id && a.email === b.email && a.nickname === b.nickname;
-}
-
-function getClientSnapshot(): AuthSnapshot {
-  const accessToken = getAccessToken();
-  const user = getStoredUser();
-
-  if (
-    cachedClientSnapshot.accessToken === accessToken &&
-    sameUser(cachedClientSnapshot.user, user)
-  ) {
-    return cachedClientSnapshot;
-  }
-
-  cachedClientSnapshot = { user, accessToken };
-  return cachedClientSnapshot;
-}
-
-function getServerSnapshot(): AuthSnapshot {
-  return SERVER_SNAPSHOT;
-}
-
-function emitAuthChange() {
-  window.dispatchEvent(new Event(AUTH_EVENT));
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const snapshot = useSyncExternalStore(
-    subscribe,
-    getClientSnapshot,
-    getServerSnapshot,
-  );
+  const [snapshot, setSnapshot] = useState<AuthSnapshot>(EMPTY_SESSION);
+  const [isReady, setIsReady] = useState(false);
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const setSession = useCallback(
-    (token: string, nextUser: AuthUser, rememberMe: boolean) => {
-      persistSignInSession(token, nextUser, rememberMe);
-      emitAuthChange();
-    },
-    [],
-  );
+  const setSession = useCallback((session: SignInResponse) => {
+    setSnapshot(toSnapshot(session));
+  }, []);
 
   const clearAuth = useCallback(() => {
-    clearSession();
-    emitAuthChange();
+    setSnapshot(EMPTY_SESSION);
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    requestBootstrapSession()
+      .then((session) => {
+        if (active) setSession(session);
+      })
+      .catch(() => {
+        if (active) clearAuth();
+      })
+      .finally(() => {
+        if (active) setIsReady(true);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [clearAuth, setSession]);
+
+  useEffect(() => {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    if (!snapshot.accessTokenExpiresAt) return;
+
+    const refreshIn = Math.max(
+      snapshot.accessTokenExpiresAt - Date.now() - 60_000,
+      0,
+    );
+
+    refreshTimer.current = setTimeout(() => {
+      refreshAccessToken().then(setSession).catch(clearAuth);
+    }, refreshIn);
+
+    return () => {
+      if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    };
+  }, [clearAuth, setSession, snapshot.accessTokenExpiresAt]);
 
   const value = useMemo(
     () => ({
       ...snapshot,
-      isReady: true,
-      isAuthenticated: Boolean(snapshot.user && snapshot.accessToken),
+      isReady,
+      isAuthenticated: Boolean(snapshot.accessToken),
       setSession,
       clearAuth,
     }),
-    [snapshot, setSession, clearAuth],
+    [snapshot, isReady, setSession, clearAuth],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
