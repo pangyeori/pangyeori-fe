@@ -13,7 +13,7 @@ export function requestEmailVerification(email: string) {
 export function confirmEmailVerification(email: string, code: string) {
   return apiClient<unknown>("/api/v1/email-verifications/confirm", {
     method: "POST",
-    body: { email, code: Number(code) },
+    body: { email, code },
   });
 }
 

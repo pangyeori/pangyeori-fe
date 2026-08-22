@@ -1,4 +1,8 @@
-import type { AuthUser } from "@/types/auth";
+type AuthUser = {
+  id: string;
+  email: string;
+  nickname: string;
+};
 
 export type StoredUser = AuthUser & {
   password: string;
@@ -6,7 +10,6 @@ export type StoredUser = AuthUser & {
 
 type GlobalAuthStore = {
   users: Map<string, StoredUser>;
-  tokens: Map<string, string>;
 };
 
 function store(): GlobalAuthStore {
@@ -16,7 +19,6 @@ function store(): GlobalAuthStore {
   if (!g.__pangyeoriAuth) {
     g.__pangyeoriAuth = {
       users: new Map(),
-      tokens: new Map(),
     };
   }
   return g.__pangyeoriAuth;
@@ -46,20 +48,6 @@ export function createUser(input: {
   users.set(email, user);
 
   return { id: user.id, email: user.email, nickname: user.nickname };
-}
-
-export function issueToken(userId: string) {
-  const token = `pg_${crypto.randomUUID().replace(/-/g, "")}`;
-  store().tokens.set(token, userId);
-  return token;
-}
-
-export function revokeToken(token: string) {
-  store().tokens.delete(token);
-}
-
-export function getUserIdByToken(token: string) {
-  return store().tokens.get(token) ?? null;
 }
 
 /** FE mock — 이메일 인증은 BE가 담당. 여기선 가입 여부만 확인 */

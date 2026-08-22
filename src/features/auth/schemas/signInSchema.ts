@@ -12,7 +12,6 @@ export const signInSchema = z.object({
       (value) => value.length >= 8 && /[^A-Za-z0-9]/.test(value),
       "비밀번호는 8자 이상이며 특수문자를 포함해야 합니다.",
     ),
-  rememberMe: z.boolean(),
 });
 
 export type SignInFormValues = z.infer<typeof signInSchema>;

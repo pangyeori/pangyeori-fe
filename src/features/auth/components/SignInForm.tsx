@@ -1,8 +1,9 @@
 "use client";
+"use no memo";
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -32,19 +33,20 @@ export function SignInForm() {
     defaultValues: {
       email: "",
       password: "",
-      rememberMe: false,
     },
   });
 
-  const { register, handleSubmit, watch, formState } = form;
+  const { register, handleSubmit, formState } = form;
   const { bindFocus, errorOf, validOf } = useFieldFeedback(formState, {
     showWhileDirty: true,
   });
 
-  const email = watch("email");
-  const password = watch("password");
-  const emailField = register("email");
-  const passwordField = register("password");
+  const [email, password] = useWatch({
+    control: form.control,
+    name: ["email", "password"],
+  });
+  const { ref: emailRef, ...emailField } = register("email");
+  const { ref: passwordRef, ...passwordField } = register("password");
   const emailFocus = bindFocus("email");
   const passwordFocus = bindFocus("password");
 
@@ -63,7 +65,6 @@ export function SignInForm() {
         signInMutation.mutate({
           email: values.email,
           password: values.password,
-          rememberMe: values.rememberMe,
         });
       })}
       noValidate
@@ -84,7 +85,7 @@ export function SignInForm() {
           void emailField.onBlur(event);
         }}
         onFocus={emailFocus.onFocus}
-        ref={emailField.ref}
+        ref={emailRef}
       />
 
       <PasswordInput
@@ -100,18 +101,10 @@ export function SignInForm() {
           void passwordField.onBlur(event);
         }}
         onFocus={passwordFocus.onFocus}
-        ref={passwordField.ref}
+        ref={passwordRef}
       />
 
-      <div className="flex items-center justify-between gap-3">
-        <label className="flex items-center gap-2 text-sm text-[var(--ink-muted)]">
-          <input
-            type="checkbox"
-            className="size-4 rounded border-[var(--line)] accent-[var(--ink)]"
-            {...register("rememberMe")}
-          />
-          로그인 상태 유지
-        </label>
+      <div className="flex justify-end">
         <Link
           href="/password/reset"
           className="text-sm text-[var(--ink-muted)] underline-offset-2 hover:underline"

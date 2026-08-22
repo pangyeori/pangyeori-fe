@@ -1,8 +1,7 @@
 import { apiClient } from "@/lib/api/client";
 
-export function signOutRequest(token: string | null) {
-  return apiClient<{ ok: boolean }>("/api/auth/logout", {
+export function signOutRequest() {
+  return apiClient<void>("/api/v1/users/signout", {
     method: "POST",
-    token,
   });
 }
