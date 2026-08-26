@@ -1,9 +1,9 @@
 import Link from "next/link";
 
 import { AuthCenterLayout } from "@/components/layout/AuthCenterLayout";
-import { PasswordResetForm } from "@/features/auth/components/PasswordResetForm";
+import { NewPasswordForm } from "@/features/auth/components/NewPasswordForm";
 
-export default function PasswordResetPage() {
+export default function NewPasswordPage() {
   return (
     <AuthCenterLayout
       variant="modern"
@@ -16,7 +16,7 @@ export default function PasswordResetPage() {
         </Link>
       }
     >
-      <PasswordResetForm />
+      <NewPasswordForm />
     </AuthCenterLayout>
   );
 }
