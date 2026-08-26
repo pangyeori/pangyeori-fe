@@ -234,7 +234,7 @@ export function RegisterForm() {
       <Input
         label="닉네임"
         autoComplete="nickname"
-        placeholder="2~12자, 특수문자 불가"
+        placeholder="2~12자, 특수문자 없이 입력"
         error={nicknameBlockingError}
         isValid={Boolean(nicknameSuccess) || nicknameCheckRequired}
         successMessage={
@@ -244,12 +244,12 @@ export function RegisterForm() {
           <Button
             type="button"
             variant="outline"
-            className="!h-12 !w-auto shrink-0 px-4"
+            className="!h-12 !w-[96px] shrink-0 px-4 !text-[13px]"
             disabled={Boolean(nicknameSuccess) || checkingNickname}
             loading={checkingNickname}
             onClick={handleNicknameCheck}
           >
-            {nicknameSuccess ? "확인 완료" : "확인"}
+            {nicknameSuccess ? "확인 완료" : "중복 확인"}
           </Button>
         }
         name={nicknameField.name}
@@ -286,7 +286,7 @@ export function RegisterForm() {
       <PasswordInput
         label="비밀번호"
         autoComplete="new-password"
-        placeholder="8자 이상"
+        placeholder="8~64자, 특수문자 포함"
         error={errorOf("password")}
         isValid={validOf("password", password)}
         name={passwordField.name}
@@ -302,7 +302,7 @@ export function RegisterForm() {
       <PasswordInput
         label="비밀번호 확인"
         autoComplete="new-password"
-        placeholder="비밀번호를 다시 입력하세요"
+        placeholder="비밀번호를 한 번 더 입력하세요"
         error={errorOf("passwordConfirm")}
         isValid={validOf("passwordConfirm", passwordConfirm)}
         name={passwordConfirmField.name}
