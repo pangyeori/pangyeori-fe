@@ -24,10 +24,6 @@ function store(): GlobalAuthStore {
   return g.__pangyeoriAuth;
 }
 
-export function findUserByEmail(email: string) {
-  return store().users.get(email.toLowerCase()) ?? null;
-}
-
 export function createUser(input: {
   nickname: string;
   email: string;
@@ -48,16 +44,4 @@ export function createUser(input: {
   users.set(email, user);
 
   return { id: user.id, email: user.email, nickname: user.nickname };
-}
-
-/** FE mock — 이메일 인증은 BE가 담당. 여기선 가입 여부만 확인 */
-export function issueTemporaryPassword(email: string) {
-  const user = findUserByEmail(email);
-  if (!user) {
-    throw new Error("USER_NOT_FOUND");
-  }
-
-  const temporaryPassword = `Tmp!${Math.random().toString(36).slice(2, 8)}`;
-  user.password = temporaryPassword;
-  return { temporaryPassword };
 }
