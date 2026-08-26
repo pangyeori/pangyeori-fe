@@ -16,15 +16,3 @@ export function confirmEmailVerification(email: string, code: string) {
     body: { email, code },
   });
 }
-
-/** 비밀번호 재설정 임시 발급 — BE 미구현, FE mock 유지 */
-export function requestTemporaryPassword(email: string) {
-  return apiClient<{
-    ok: boolean;
-    message: string;
-    temporaryPassword?: string;
-  }>("/api/auth/password/reset", {
-    method: "POST",
-    body: { email },
-  });
-}

@@ -4,147 +4,128 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import Link from "next/link";
-import { useCallback, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import { z } from "zod";
 
 import { Button } from "@/components/ui/Button";
-import { requestTemporaryPassword } from "@/features/auth/api/emailVerification";
+import { issuePasswordResetToken } from "@/features/auth/api/passwordReset";
 import {
   AuthCardHeader,
   FormAlert,
 } from "@/features/auth/components/shared/AuthFormChrome";
 import { EmailVerifyField } from "@/features/auth/components/shared/EmailVerifyField";
 import { useFieldFeedback } from "@/features/auth/hooks/useFieldFeedback";
+import {
+  passwordResetRequestSchema,
+  type PasswordResetRequestValues,
+} from "@/features/auth/schemas/passwordResetSchema";
+import {
+  clearPasswordResetSession,
+  setPasswordResetSession,
+} from "@/features/auth/store/passwordResetSession";
 import { ApiError } from "@/lib/api/client";
 
-const passwordResetSchema = z
-  .object({
-    email: z
-      .string()
-      .min(1, "이메일을 입력해주세요.")
-      .email("이메일 형식으로 입력해주세요."),
-    emailVerified: z.boolean(),
-  })
-  .refine((data) => data.emailVerified, {
-    message: "이메일 인증을 완료해주세요.",
-    path: ["emailVerified"],
-  });
-
-type PasswordResetFormValues = z.infer<typeof passwordResetSchema>;
-
 export function PasswordResetForm() {
+  const router = useRouter();
   const [emailVerified, setEmailVerified] = useState(false);
-  const [issuedPassword, setIssuedPassword] = useState<string | null>(null);
-
-  const form = useForm<PasswordResetFormValues>({
-    resolver: zodResolver(passwordResetSchema),
+  const form = useForm<PasswordResetRequestValues>({
+    resolver: zodResolver(passwordResetRequestSchema),
     mode: "onBlur",
     reValidateMode: "onBlur",
-    defaultValues: {
-      email: "",
-      emailVerified: false,
-    },
+    defaultValues: { email: "" },
   });
-
-  const { register, handleSubmit, setValue, formState } = form;
-  const { isSubmitted } = formState;
-  const { bindFocus, errorOf, validOf } = useFieldFeedback(formState);
-
   const email = useWatch({ control: form.control, name: "email" });
-  const { ref: emailRef, ...emailField } = register("email");
-  const emailFocus = bindFocus("email");
+  const feedback = useFieldFeedback(form.formState);
 
-  const onVerifiedChange = useCallback(
-    (verified: boolean) => {
-      setEmailVerified(verified);
-      setValue("emailVerified", verified, {
-        shouldValidate: isSubmitted,
+  useEffect(() => {
+    clearPasswordResetSession();
+  }, []);
+
+  const continueMutation = useMutation({
+    mutationFn: (requestedEmail: string) =>
+      issuePasswordResetToken(requestedEmail),
+    onSuccess: (data, requestedEmail) => {
+      setPasswordResetSession({
+        email: requestedEmail,
+        passwordResetToken: data.passwordResetToken,
       });
-      if (!verified) {
-        setIssuedPassword(null);
-      }
-    },
-    [isSubmitted, setValue],
-  );
-
-  const resetMutation = useMutation({
-    mutationFn: () => requestTemporaryPassword(email),
-    onSuccess: (data) => {
-      setIssuedPassword(data.temporaryPassword ?? null);
+      router.push("/password/reset/new");
     },
   });
 
   const serverError =
-    resetMutation.error instanceof ApiError
-      ? resetMutation.error.message
-      : resetMutation.error
-        ? "임시 비밀번호 발급에 실패했습니다."
+    continueMutation.error instanceof ApiError
+      ? continueMutation.error.message
+      : continueMutation.error
+        ? "비밀번호 재설정 토큰 발급에 실패했습니다."
         : null;
+  const { ref: emailRef, ...emailField } = form.register("email");
+  const emailFocus = feedback.bindFocus("email");
 
   return (
     <form
-      className="flex flex-col gap-5"
-      onSubmit={handleSubmit(() => {
+      className="flex flex-col gap-6"
+      onSubmit={form.handleSubmit((values) => {
         if (!emailVerified) return;
-        resetMutation.reset();
-        setIssuedPassword(null);
-        resetMutation.mutate();
+        continueMutation.reset();
+        continueMutation.mutate(values.email.trim());
       })}
       noValidate
     >
+      <div className="flex items-center justify-between">
+        <span className="rounded-full bg-[var(--ink)] px-3 py-1 text-[11px] font-bold tracking-[0.08em] text-white">
+          STEP 1 OF 2
+        </span>
+        <span className="text-xs font-medium text-[var(--ink-faint)]">
+          계정 확인
+        </span>
+      </div>
+
       <AuthCardHeader
-        title="비밀번호 찾기"
-        description="가입한 이메일로 임시 비밀번호를 받을 수 있습니다"
+        title="비밀번호 재설정"
+        description="이메일로 받은 6자리 인증번호를 입력해주세요"
       />
 
-      <EmailVerifyField
-        email={email}
-        emailError={errorOf("email")}
-        verifyRequiredError={
-          isSubmitted && !emailVerified
-            ? "이메일 인증을 완료해주세요."
-            : undefined
-        }
-        emailValid={validOf("email", email)}
-        emailVerified={emailVerified}
-        onVerifiedChange={onVerifiedChange}
-        name={emailField.name}
-        onChange={emailField.onChange}
-        onBlur={(event) => {
-          emailFocus.onBlurCapture();
-          emailField.onBlur(event);
-        }}
-        onFocus={emailFocus.onFocus}
-        inputRef={emailRef}
-        emailLabel="이메일을 입력해 주세요."
-        emailPlaceholder="email@example.com"
-        timerPrefix="재전송까지"
-      />
+      <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface-muted)]/70 p-4 sm:p-5">
+        <EmailVerifyField
+          email={email}
+          emailError={feedback.errorOf("email")}
+          emailValid={feedback.validOf("email", email)}
+          emailVerified={emailVerified}
+          onVerifiedChange={setEmailVerified}
+          name={emailField.name}
+          onChange={emailField.onChange}
+          onBlur={(event) => {
+            emailFocus.onBlurCapture();
+            void emailField.onBlur(event);
+          }}
+          onFocus={emailFocus.onFocus}
+          inputRef={emailRef}
+          emailLabel="이메일"
+          emailPlaceholder="email@example.com"
+          timerPrefix="남은 시간"
+        />
+      </div>
 
       {serverError ? <FormAlert>{serverError}</FormAlert> : null}
 
-      {issuedPassword ? (
-        <FormAlert tone="success">
-          임시 비밀번호가 발급되었습니다. (로컬 mock:{" "}
-          <strong>{issuedPassword}</strong>) 로그인 후 비밀번호를 변경하세요.
-        </FormAlert>
-      ) : null}
-
       <Button
         type="submit"
+        className="!h-[52px] rounded-xl shadow-[0_8px_20px_rgba(17,24,39,0.16)]"
         disabled={!emailVerified}
-        loading={resetMutation.isPending}
+        loading={continueMutation.isPending}
       >
-        임시 비밀번호 발급받기
+        재설정 계속하기
       </Button>
 
       <p className="text-center text-sm text-[var(--ink-muted)]">
+        비밀번호가 기억났나요?{" "}
         <Link
           href="/signin"
-          className="font-semibold text-[var(--brand-blue)] underline-offset-2 hover:underline"
+          className="font-semibold text-[var(--ink)] underline-offset-4 hover:underline"
         >
-          로그인으로 돌아가기
+          로그인
         </Link>
       </p>
     </form>

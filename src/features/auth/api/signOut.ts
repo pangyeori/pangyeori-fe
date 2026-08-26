@@ -1,7 +1,7 @@
 import { apiClient } from "@/lib/api/client";
 
 export function signOutRequest() {
-  return apiClient<void>("/api/v1/users/signout", {
+  return apiClient<void>("/api/v1/auth/signout", {
     method: "POST",
   });
 }

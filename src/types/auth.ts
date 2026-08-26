@@ -6,8 +6,6 @@ export type SignInRequest = {
 export type SignInResponse = {
   accessToken: string;
   tokenType: string;
-  accessTokenExpiresIn: number;
-  refreshTokenExpiresIn: number;
 };
 
 export type RegisterRequest = {

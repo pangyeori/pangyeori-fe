@@ -75,7 +75,7 @@ export function SignInForm() {
         label="이메일"
         type="email"
         autoComplete="email"
-        placeholder="juintin@kakao.com"
+        placeholder="email@example.com"
         error={errorOf("email")}
         isValid={validOf("email", email)}
         name={emailField.name}
@@ -91,7 +91,7 @@ export function SignInForm() {
       <PasswordInput
         label="비밀번호"
         autoComplete="current-password"
-        placeholder="••••••••"
+        placeholder="비밀번호를 입력하세요"
         error={errorOf("password")}
         isValid={validOf("password", password)}
         name={passwordField.name}
@@ -109,7 +109,7 @@ export function SignInForm() {
           href="/password/reset"
           className="text-sm text-[var(--ink-muted)] underline-offset-2 hover:underline"
         >
-          비밀번호 찾기
+          비밀번호 재설정
         </Link>
       </div>
 

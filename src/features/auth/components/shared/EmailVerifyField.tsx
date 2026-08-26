@@ -42,6 +42,8 @@ type EmailVerifyFieldProps = {
 
 type PinTone = "idle" | "checking" | "success" | "error";
 
+const RESEND_COOLDOWN_SECONDS = 60;
+
 function formatSeconds(total: number) {
   const minutes = Math.floor(total / 60);
   const seconds = total % 60;
@@ -99,12 +101,13 @@ export function EmailVerifyField({
   onFocus,
   inputRef,
   emailLabel = "이메일",
-  emailPlaceholder = "juintin@kakao.com",
+  emailPlaceholder = "email@example.com",
   timerPrefix = "남은 시간",
 }: EmailVerifyFieldProps) {
   const [code, setCode] = useState<string[]>(() => Array(6).fill(""));
   const [sent, setSent] = useState(false);
   const [remaining, setRemaining] = useState(0);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [requesting, setRequesting] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [sentNotice, setSentNotice] = useState<string | null>(null);
@@ -141,6 +144,14 @@ export function EmailVerifyField({
     return () => window.clearInterval(id);
   }, [remaining]);
 
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const id = window.setInterval(() => {
+      setResendCooldown((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [resendCooldown]);
+
   const resetVerificationUi = useCallback(() => {
     if (successTimerRef.current !== null) {
       window.clearTimeout(successTimerRef.current);
@@ -153,6 +164,7 @@ export function EmailVerifyField({
     setSent(false);
     setCode(Array(6).fill(""));
     setRemaining(0);
+    setResendCooldown(0);
     setSentNotice(null);
     setSendError(null);
     setCodeError(null);
@@ -190,6 +202,7 @@ export function EmailVerifyField({
       setSent(true);
       setCode(Array(6).fill(""));
       setRemaining(EMAIL_CODE_TTL_SECONDS);
+      setResendCooldown(RESEND_COOLDOWN_SECONDS);
       setSentNotice("인증번호를 발송했습니다. 이메일을 확인해주세요.");
       onVerifiedChange(false);
       window.requestAnimationFrame(() => codeInputRefs.current[0]?.focus());
@@ -352,12 +365,26 @@ export function EmailVerifyField({
           <Button
             type="button"
             variant="outline"
-            className="!h-12 !w-auto shrink-0 px-4"
-            disabled={emailVerified || requesting}
+            className="!h-12 !w-[96px] shrink-0 whitespace-nowrap px-2 !text-[13px] tabular-nums"
+            disabled={emailVerified || requesting || resendCooldown > 0}
             loading={requesting}
             onClick={handleRequest}
           >
-            {sent && !emailVerified ? "재전송" : "인증"}
+            {sent && !emailVerified ? (
+              resendCooldown > 0 ? (
+                <span className="inline-flex items-center justify-center whitespace-nowrap leading-none">
+                  <span>재전송(</span>
+                  <span className="inline-block text-right">
+                    {resendCooldown}
+                  </span>
+                  <span>초)</span>
+                </span>
+              ) : (
+                "재전송"
+              )
+            ) : (
+              "인증"
+            )}
           </Button>
         }
         name={name}

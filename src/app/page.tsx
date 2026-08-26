@@ -16,15 +16,23 @@ export default function HomePage() {
       <SiteHeader
         rightSlot={
           isReady && isAuthenticated ? (
-            <Button
-              type="button"
-              variant="outline"
-              className="!h-10 !w-auto px-4"
-              loading={signOutMutation.isPending}
-              onClick={() => signOutMutation.mutate()}
-            >
-              로그아웃
-            </Button>
+            <div className="flex items-center gap-2">
+              <Link
+                href="/mypage"
+                className="rounded-lg border border-[var(--line)] bg-white px-4 py-2 text-sm font-semibold text-[var(--ink)] hover:bg-[var(--surface-muted)]"
+              >
+                마이페이지
+              </Link>
+              <Button
+                type="button"
+                variant="outline"
+                className="!h-10 !w-auto px-4"
+                loading={signOutMutation.isPending}
+                onClick={() => signOutMutation.mutate()}
+              >
+                로그아웃
+              </Button>
+            </div>
           ) : (
             <div className="flex items-center gap-2">
               <Link
@@ -60,8 +68,8 @@ export default function HomePage() {
               판겨리에 로그인했습니다
             </h1>
             <p className="mt-4 text-sm leading-relaxed text-[var(--ink-muted)]">
-              인증 세션이 활성화되었습니다. 사용자 프로필 API가 제공되면 계정
-              정보를 이곳에 표시할 수 있습니다.
+              인증 세션이 활성화되었습니다. 마이페이지에서 내 계정 정보를
+              확인할 수 있습니다.
             </p>
             <Button
               type="button"
