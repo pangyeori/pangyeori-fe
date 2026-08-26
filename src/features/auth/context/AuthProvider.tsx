@@ -44,11 +44,28 @@ function requestBootstrapSession() {
   return bootstrapRequest;
 }
 
+function getAccessTokenExpiresAt(accessToken: string) {
+  try {
+    const payload = accessToken.split(".")[1];
+    if (!payload) return null;
+
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(
+      normalized.length + ((4 - (normalized.length % 4)) % 4),
+      "=",
+    );
+    const decoded = JSON.parse(atob(padded)) as { exp?: unknown };
+    return typeof decoded.exp === "number" ? decoded.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
 function toSnapshot(session: SignInResponse): AuthSnapshot {
   return {
     accessToken: session.accessToken,
     tokenType: session.tokenType,
-    accessTokenExpiresAt: Date.now() + session.accessTokenExpiresIn * 1000,
+    accessTokenExpiresAt: getAccessTokenExpiresAt(session.accessToken),
   };
 }
 
