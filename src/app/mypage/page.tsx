@@ -8,10 +8,19 @@ import { SiteFooter, SiteHeader } from "@/components/layout/SiteChrome";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/features/auth/context/AuthProvider";
 import { useSignOut } from "@/features/auth/hooks/useSignOut";
+import { PastDebatesSkeleton } from "@/features/mypage/components/PastDebatesSkeleton";
 import { ProfileAvatar } from "@/features/mypage/components/ProfileAvatar";
 import { ProfileSkeleton } from "@/features/mypage/components/ProfileSkeleton";
 import { useMyProfile } from "@/features/mypage/hooks/useMyProfile";
 import { ApiError } from "@/lib/api/client";
+
+function formatJoinedAt(joinedAt: string) {
+  const dateParts = /^(\d{4})-(\d{2})-(\d{2})/.exec(joinedAt);
+  if (!dateParts) return "날짜 정보 없음";
+
+  const [, year, month, day] = dateParts;
+  return `${year}. ${month}. ${day}`;
+}
 
 export default function MyPage() {
   const router = useRouter();
@@ -22,12 +31,6 @@ export default function MyPage() {
   const isUnauthorized =
     profileQuery.error instanceof ApiError &&
     profileQuery.error.status === 401;
-
-  useEffect(() => {
-    if (isReady && !isAuthenticated) {
-      router.replace("/signin");
-    }
-  }, [isAuthenticated, isReady, router]);
 
   useEffect(() => {
     if (isUnauthorized) {
@@ -43,15 +46,24 @@ export default function MyPage() {
     <div className="flex min-h-full flex-1 flex-col bg-[var(--page-bg)]">
       <SiteHeader
         rightSlot={
-          <Button
-            type="button"
-            variant="outline"
-            className="!h-10 !w-auto px-4"
-            loading={signOutMutation.isPending}
-            onClick={() => signOutMutation.mutate()}
-          >
-            로그아웃
-          </Button>
+          isAuthenticated ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="!h-10 !w-auto px-4"
+              loading={signOutMutation.isPending}
+              onClick={() => signOutMutation.mutate()}
+            >
+              로그아웃
+            </Button>
+          ) : (
+            <Link
+              href="/signin"
+              className="rounded-lg bg-[var(--btn-primary)] px-4 py-2 text-sm font-semibold text-white"
+            >
+              로그인
+            </Link>
+          )
         }
       />
 
@@ -75,6 +87,23 @@ export default function MyPage() {
 
         {showSkeleton ? <ProfileSkeleton /> : null}
 
+        {isReady && !isAuthenticated ? (
+          <section className="rounded-2xl border border-[var(--line)] bg-white p-8 text-center shadow-[0_12px_40px_rgba(16,24,40,0.06)]">
+            <h2 className="text-xl font-bold text-[var(--ink)]">
+              로그인이 필요합니다
+            </h2>
+            <p className="mt-2 text-sm text-[var(--ink-muted)]">
+              회원 정보는 로그인 후 확인할 수 있습니다.
+            </p>
+            <Link
+              href="/signin"
+              className="mt-6 inline-flex h-11 items-center justify-center rounded-lg bg-[var(--btn-primary)] px-6 text-sm font-semibold text-white"
+            >
+              로그인하기
+            </Link>
+          </section>
+        ) : null}
+
         {profileQuery.isSuccess ? (
           <section className="rounded-2xl border border-[var(--line)] bg-white p-6 shadow-[0_12px_40px_rgba(16,24,40,0.06)] sm:p-8">
             <h2 className="text-base font-bold text-[var(--ink)]">회원 정보</h2>
@@ -90,6 +119,12 @@ export default function MyPage() {
                 </p>
                 <p className="mt-2 break-all text-[15px] text-[var(--ink-muted)]">
                   {profileQuery.data.email}
+                </p>
+                <p className="mt-5 text-sm text-[var(--ink-muted)]">
+                  가입일{" "}
+                  <time dateTime={profileQuery.data.joinedAt}>
+                    {formatJoinedAt(profileQuery.data.joinedAt)}
+                  </time>
                 </p>
               </div>
             </div>
@@ -118,6 +153,8 @@ export default function MyPage() {
             </Button>
           </section>
         ) : null}
+
+        <PastDebatesSkeleton />
       </main>
 
       <SiteFooter />

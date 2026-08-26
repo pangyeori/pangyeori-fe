@@ -3,4 +3,5 @@ export type UserProfile = {
   email: string;
   nickname: string;
   profileImageUrl: string | null;
+  joinedAt: string;
 };
