@@ -21,8 +21,15 @@ export function SiteHeader({ rightSlot }: SiteHeaderProps) {
 
 export function SiteFooter() {
   return (
-    <footer className="border-t border-[var(--line)] bg-white py-4 text-center text-sm text-[var(--ink-faint)]">
-      Footer
+    <footer className="border-t border-[var(--line)] bg-white px-5 py-7 sm:px-8">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between">
+        <p className="font-[family-name:var(--font-display)] font-bold text-[var(--ink)]">
+          판겨리
+        </p>
+        <p className="text-xs text-[var(--ink-faint)]">
+          AI 판정은 토론을 돕기 위한 참고 정보입니다.
+        </p>
+      </div>
     </footer>
   );
 }
