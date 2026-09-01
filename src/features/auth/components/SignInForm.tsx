@@ -15,7 +15,6 @@ import {
   FormAlert,
 } from "@/features/auth/components/shared/AuthFormChrome";
 import { KakaoAuthButton } from "@/features/auth/components/shared/KakaoAuthButton";
-import { useFieldFeedback } from "@/features/auth/hooks/useFieldFeedback";
 import { useSignIn } from "@/features/auth/hooks/useSignIn";
 import {
   signInSchema,
@@ -36,19 +35,23 @@ export function SignInForm() {
     },
   });
 
-  const { register, handleSubmit, formState } = form;
-  const { bindFocus, errorOf, validOf } = useFieldFeedback(formState, {
-    showWhileDirty: true,
-  });
-
+  const { register, handleSubmit, formState, setFocus, setValue } = form;
   const [email, password] = useWatch({
     control: form.control,
     name: ["email", "password"],
   });
   const { ref: emailRef, ...emailField } = register("email");
   const { ref: passwordRef, ...passwordField } = register("password");
-  const emailFocus = bindFocus("email");
-  const passwordFocus = bindFocus("password");
+  const emailError = formState.isSubmitted
+    ? formState.errors.email?.message
+    : undefined;
+  const passwordError = formState.isSubmitted
+    ? formState.errors.password?.message
+    : undefined;
+  const credentialError =
+    emailError && passwordError
+      ? "이메일과 비밀번호를 입력해주세요."
+      : emailError ?? passwordError;
 
   const serverError =
     signInMutation.error instanceof ApiError
@@ -75,34 +78,56 @@ export function SignInForm() {
         label="이메일"
         type="email"
         autoComplete="email"
-        placeholder="email@example.com"
-        error={errorOf("email")}
-        isValid={validOf("email", email)}
+        floatingLabel
+        appearance="underline"
+        showClear={Boolean(email)}
+        onClear={() => {
+          setValue("email", "", {
+            shouldDirty: true,
+            shouldValidate: formState.isSubmitted,
+          });
+          setFocus("email");
+        }}
+        aria-invalid={Boolean(emailError)}
+        aria-describedby={credentialError ? "signin-credentials-error" : undefined}
         name={emailField.name}
         onChange={emailField.onChange}
-        onBlur={(event) => {
-          emailFocus.onBlurCapture();
-          void emailField.onBlur(event);
-        }}
-        onFocus={emailFocus.onFocus}
+        onBlur={emailField.onBlur}
         ref={emailRef}
       />
 
       <PasswordInput
         label="비밀번호"
         autoComplete="current-password"
-        placeholder="비밀번호를 입력하세요"
-        error={errorOf("password")}
-        isValid={validOf("password", password)}
+        floatingLabel
+        appearance="underline"
+        showClear={Boolean(password)}
+        onClear={() => {
+          setValue("password", "", {
+            shouldDirty: true,
+            shouldValidate: formState.isSubmitted,
+          });
+          setFocus("password");
+        }}
+        aria-invalid={Boolean(passwordError)}
+        aria-describedby={credentialError ? "signin-credentials-error" : undefined}
         name={passwordField.name}
         onChange={passwordField.onChange}
-        onBlur={(event) => {
-          passwordFocus.onBlurCapture();
-          void passwordField.onBlur(event);
-        }}
-        onFocus={passwordFocus.onFocus}
+        onBlur={passwordField.onBlur}
         ref={passwordRef}
       />
+
+      <div className="min-h-6">
+        {credentialError ? (
+          <p
+            id="signin-credentials-error"
+            className="whitespace-nowrap text-sm leading-6 text-[var(--danger)]"
+            role="alert"
+          >
+            {credentialError}
+          </p>
+        ) : null}
+      </div>
 
       <div className="flex justify-end">
         <Link

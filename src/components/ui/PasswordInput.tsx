@@ -4,9 +4,11 @@ import { forwardRef, useState, type InputHTMLAttributes } from "react";
 
 import {
   CheckIcon,
+  ClearIcon,
   FieldShell,
   fieldToneClass,
   resolveFieldTone,
+  type FieldAppearance,
 } from "@/components/ui/Input";
 
 type PasswordInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "type"> & {
@@ -14,6 +16,10 @@ type PasswordInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "type"> & 
   error?: string;
   isValid?: boolean;
   successMessage?: string;
+  floatingLabel?: boolean;
+  appearance?: FieldAppearance;
+  showClear?: boolean;
+  onClear?: () => void;
 };
 
 export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
@@ -23,7 +29,12 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
       error,
       isValid = false,
       successMessage,
+      floatingLabel = false,
+      appearance = "box",
+      showClear = false,
+      onClear,
       id,
+      placeholder,
       className = "",
       ...props
     },
@@ -32,6 +43,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
     const [visible, setVisible] = useState(false);
     const inputId = id ?? props.name;
     const tone = resolveFieldTone(error, isValid);
+    const isUnderline = appearance === "underline";
 
     return (
       <FieldShell
@@ -39,22 +51,42 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
         htmlFor={inputId}
         error={error}
         successMessage={!error && isValid ? successMessage : undefined}
+        hideLabel={floatingLabel}
       >
         <div className="relative">
           <input
             id={inputId}
             ref={ref}
             type={visible ? "text" : "password"}
-            className={`h-12 w-full rounded-lg border bg-white px-3.5 pr-20 text-[15px] text-[var(--ink)] outline-none transition duration-200 placeholder:text-[var(--ink-faint)] focus:ring-2 ${fieldToneClass(tone)} ${className}`}
+            placeholder={floatingLabel ? " " : placeholder}
+            className={`peer w-full border text-[15px] text-[var(--ink)] outline-none transition duration-200 placeholder:text-[var(--ink-faint)] ${showClear ? "pr-[5.5rem]" : "pr-11"} ${isUnderline ? "h-14 rounded-none border-x-0 border-t-0 bg-transparent pb-0.5 pl-0 focus:ring-0" : "h-12 rounded-lg bg-white px-3.5 focus:ring-2"} ${floatingLabel ? "pt-4.5" : ""} ${fieldToneClass(tone, appearance)} ${className}`}
             aria-invalid={Boolean(error)}
             aria-describedby={error && inputId ? `${inputId}-error` : undefined}
             {...props}
           />
+          {floatingLabel ? (
+            <label
+              htmlFor={inputId}
+              className={`pointer-events-none absolute top-2 text-[11px] font-medium text-[var(--ink-muted)] transition-all duration-150 peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:text-[17px] peer-placeholder-shown:text-[var(--ink-faint)] peer-focus:top-2 peer-focus:translate-y-0 peer-focus:text-[11px] ${isUnderline ? "left-0" : "left-3.5"}`}
+            >
+              {label}
+            </label>
+          ) : null}
           <div className="absolute inset-y-0 right-0 flex items-center">
-            {tone === "success" ? (
+            {tone === "success" && !showClear ? (
               <span className="flex w-9 items-center justify-center text-[var(--success)]">
                 <CheckIcon />
               </span>
+            ) : null}
+            {showClear && onClear ? (
+              <button
+                type="button"
+                className="flex h-full w-10 items-center justify-center text-[var(--ink-faint)] transition hover:text-[var(--ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-[var(--ink-muted)]"
+                onClick={onClear}
+                aria-label={`${label} 입력 지우기`}
+              >
+                <ClearIcon />
+              </button>
             ) : null}
             <button
               type="button"
