@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/features/auth/context/AuthProvider";
 import { useSignOut } from "@/features/auth/hooks/useSignOut";
 import { PastDebatesSkeleton } from "@/features/mypage/components/PastDebatesSkeleton";
-import { ProfileAvatar } from "@/features/mypage/components/ProfileAvatar";
+import { ProfileImageEditor } from "@/features/mypage/components/ProfileImageEditor";
 import { ProfileSkeleton } from "@/features/mypage/components/ProfileSkeleton";
 import { useMyProfile } from "@/features/mypage/hooks/useMyProfile";
 import { ApiError } from "@/lib/api/client";
@@ -108,8 +108,7 @@ export default function MyPage() {
           <section className="rounded-2xl border border-[var(--line)] bg-white p-6 shadow-[0_12px_40px_rgba(16,24,40,0.06)] sm:p-8">
             <h2 className="text-base font-bold text-[var(--ink)]">회원 정보</h2>
             <div className="mt-8 flex flex-col items-center gap-6 sm:flex-row sm:gap-8">
-              <ProfileAvatar
-                key={profileQuery.data.profileImageUrl ?? "default-profile"}
+              <ProfileImageEditor
                 nickname={profileQuery.data.nickname}
                 profileImageUrl={profileQuery.data.profileImageUrl}
               />
