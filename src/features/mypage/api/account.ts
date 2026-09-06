@@ -6,8 +6,21 @@ export type UpdateProfileRequest = {
   profileImageKey?: string;
 };
 
+export type ChangePasswordRequest = {
+  currentPassword: string;
+  newPassword: string;
+};
+
 export function updateProfile(body: UpdateProfileRequest, token: string) {
   return apiClient<UserProfileResponse>("/api/v1/users/me", {
+    method: "PATCH",
+    token,
+    body,
+  });
+}
+
+export function changePassword(body: ChangePasswordRequest, token: string) {
+  return apiClient<void>("/api/v1/users/me/password", {
     method: "PATCH",
     token,
     body,

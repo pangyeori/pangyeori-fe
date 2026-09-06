@@ -154,6 +154,13 @@ export function ProfileEditForm({ profile }: { profile: UserProfile }) {
           <div className="mt-5 grid gap-5">
             <Input label="닉네임" placeholder="변경할 닉네임을 입력해주세요." error={form.formState.errors.nickname?.message} {...form.register("nickname", { onChange: () => saveMutation.reset() })} />
             <Input label="이메일" value={profile.email} disabled readOnly className="disabled:bg-[var(--surface-muted)]" />
+            <div>
+              <p className="text-sm font-medium text-[var(--ink)]">비밀번호</p>
+              <div className="mt-1.5 flex h-12 items-center justify-between rounded-lg border border-[var(--line)] bg-[var(--surface-muted)] px-3.5">
+                <span className="text-[var(--ink-faint)]">••••••••</span>
+                <button type="button" className="text-sm font-semibold text-[var(--brand-blue)]" onClick={() => router.push("/mypage/password")}>변경하기</button>
+              </div>
+            </div>
           </div>
         </section>
 

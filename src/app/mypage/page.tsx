@@ -135,6 +135,14 @@ export default function MyPage() {
                 </p>
               </div>
             </div>
+            <div className="mt-6 flex justify-end border-t border-[var(--line)] pt-5">
+              <Link
+                href="/mypage/password"
+                className="text-sm font-semibold text-[var(--brand-blue)] underline-offset-4 hover:underline"
+              >
+                비밀번호 변경 <span aria-hidden>›</span>
+              </Link>
+            </div>
           </section>
         ) : null}
 
