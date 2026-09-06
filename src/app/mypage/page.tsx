@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/features/auth/context/AuthProvider";
 import { useSignOut } from "@/features/auth/hooks/useSignOut";
 import { PastDebatesSkeleton } from "@/features/mypage/components/PastDebatesSkeleton";
-import { ProfileImageEditor } from "@/features/mypage/components/ProfileImageEditor";
+import { ProfileAvatar } from "@/features/mypage/components/ProfileAvatar";
 import { ProfileSkeleton } from "@/features/mypage/components/ProfileSkeleton";
 import { useMyProfile } from "@/features/mypage/hooks/useMyProfile";
 import { ApiError } from "@/lib/api/client";
@@ -106,9 +106,17 @@ export default function MyPage() {
 
         {profileQuery.isSuccess ? (
           <section className="rounded-2xl border border-[var(--line)] bg-white p-6 shadow-[0_12px_40px_rgba(16,24,40,0.06)] sm:p-8">
-            <h2 className="text-base font-bold text-[var(--ink)]">회원 정보</h2>
+            <div className="flex items-center justify-between gap-4">
+              <h2 className="text-base font-bold text-[var(--ink)]">회원 정보</h2>
+              <Link
+                href="/mypage/edit"
+                className="rounded-lg border border-[var(--line)] bg-white px-4 py-2 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-muted)]"
+              >
+                내 정보 수정
+              </Link>
+            </div>
             <div className="mt-8 flex flex-col items-center gap-6 sm:flex-row sm:gap-8">
-              <ProfileImageEditor
+              <ProfileAvatar
                 nickname={profileQuery.data.nickname}
                 profileImageUrl={profileQuery.data.profileImageUrl}
               />
@@ -126,6 +134,14 @@ export default function MyPage() {
                   </time>
                 </p>
               </div>
+            </div>
+            <div className="mt-6 flex justify-end border-t border-[var(--line)] pt-5">
+              <Link
+                href="/mypage/password"
+                className="text-sm font-semibold text-[var(--brand-blue)] underline-offset-4 hover:underline"
+              >
+                비밀번호 변경 <span aria-hidden>›</span>
+              </Link>
             </div>
           </section>
         ) : null}

@@ -3,7 +3,19 @@ import Link from "next/link";
 import { AuthLayout } from "@/components/layout/AuthLayout";
 import { SignInForm } from "@/features/auth/components/SignInForm";
 
-export default function SignInPage() {
+type SignInPageProps = {
+  searchParams: Promise<{ reason?: string }>;
+};
+
+export default async function SignInPage({ searchParams }: SignInPageProps) {
+  const { reason } = await searchParams;
+  const notice =
+    reason === "password-changed"
+      ? "비밀번호가 변경되었습니다. 새 비밀번호로 다시 로그인해주세요."
+      : reason === "withdrawn"
+        ? "회원 탈퇴가 완료되었습니다."
+        : undefined;
+
   return (
     <AuthLayout
       headerRight={
@@ -24,7 +36,7 @@ export default function SignInPage() {
       }
       heroDescription="로그인하여 재판에 참여하고 AI 판사의 공정한 판결을 받아보세요"
     >
-      <SignInForm />
+      <SignInForm notice={notice} />
     </AuthLayout>
   );
 }

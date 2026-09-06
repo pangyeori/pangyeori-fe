@@ -22,7 +22,7 @@ import {
 } from "@/features/auth/schemas/signInSchema";
 import { ApiError } from "@/lib/api/client";
 
-export function SignInForm() {
+export function SignInForm({ notice }: { notice?: string }) {
   const signInMutation = useSignIn();
 
   const form = useForm<SignInFormValues>({
@@ -73,6 +73,8 @@ export function SignInForm() {
       noValidate
     >
       <AuthCardHeader title="로그인" description="계정으로 로그인하세요" />
+
+      {notice ? <FormAlert tone="success">{notice}</FormAlert> : null}
 
       <Input
         label="이메일"
