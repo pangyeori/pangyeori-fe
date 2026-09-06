@@ -12,7 +12,9 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
   const notice =
     reason === "password-changed"
       ? "비밀번호가 변경되었습니다. 새 비밀번호로 다시 로그인해주세요."
-      : undefined;
+      : reason === "withdrawn"
+        ? "회원 탈퇴가 완료되었습니다."
+        : undefined;
 
   return (
     <AuthLayout

@@ -22,6 +22,7 @@ import {
   validateProfileImage,
 } from "@/features/mypage/api/profileImage";
 import { ProfileAvatar } from "@/features/mypage/components/ProfileAvatar";
+import { useAccountWithdrawal } from "@/features/mypage/hooks/useAccountSettings";
 import {
   nicknameUpdateSchema,
   type NicknameUpdateFormValues,
@@ -39,6 +40,8 @@ export function ProfileEditForm({ profile }: { profile: UserProfile }) {
   const [removeImage, setRemoveImage] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const withdrawal = useAccountWithdrawal();
   const form = useForm<NicknameUpdateFormValues>({
     resolver: zodResolver(nicknameUpdateSchema),
     mode: "onChange",
@@ -161,6 +164,11 @@ export function ProfileEditForm({ profile }: { profile: UserProfile }) {
                 <button type="button" className="text-sm font-semibold text-[var(--brand-blue)]" onClick={() => router.push("/mypage/password")}>변경하기</button>
               </div>
             </div>
+            <div className="flex justify-end border-t border-[var(--line)] pt-5">
+              <button type="button" className="text-sm font-semibold text-[var(--danger)] underline-offset-4 hover:underline" onClick={() => setWithdrawOpen(true)}>
+                계정 탈퇴 <span aria-hidden>›</span>
+              </button>
+            </div>
           </div>
         </section>
 
@@ -176,6 +184,15 @@ export function ProfileEditForm({ profile }: { profile: UserProfile }) {
         <div className="mt-6 flex justify-end gap-2">
           <Button type="button" variant="outline" className="!w-auto" onClick={() => setCancelOpen(false)}>계속 작성</Button>
           <Button type="button" className="!w-auto" onClick={() => router.push("/mypage")}>수정 취소</Button>
+        </div>
+      </Modal>
+
+      <Modal open={withdrawOpen} title="정말 탈퇴하시겠어요?🥺" onClose={() => !withdrawal.isPending && setWithdrawOpen(false)}>
+        <p><strong className="text-[var(--ink)]">{profile.nickname}</strong> 계정은 탈퇴 후 복구할 수 없으며 모든 기기에서 로그아웃됩니다.</p>
+        {withdrawal.error ? <div className="mt-4"><FormAlert>{withdrawal.error.message}</FormAlert></div> : null}
+        <div className="mt-6 flex justify-end gap-2">
+          <Button type="button" variant="outline" className="!w-auto" disabled={withdrawal.isPending} onClick={() => setWithdrawOpen(false)}>취소</Button>
+          <Button type="button" className="!w-auto bg-[var(--danger)] hover:brightness-90" loading={withdrawal.isPending} onClick={() => withdrawal.mutate()}>탈퇴하기</Button>
         </div>
       </Modal>
     </>

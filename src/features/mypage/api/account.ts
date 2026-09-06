@@ -26,3 +26,10 @@ export function changePassword(body: ChangePasswordRequest, token: string) {
     body,
   });
 }
+
+export function withdrawAccount(token: string) {
+  return apiClient<void>("/api/v1/users/me", {
+    method: "DELETE",
+    token,
+  });
+}
