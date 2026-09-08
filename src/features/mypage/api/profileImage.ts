@@ -52,7 +52,7 @@ export async function uploadProfileImageToStorage(
     });
   } catch {
     throw new ApiError(
-      "이미지 저장소에 연결할 수 없습니다. 네트워크 상태를 확인하세요.",
+      "이미지를 업로드하지 못했습니다. 잠시 후 다시 시도해주세요.",
       0,
     );
   }
