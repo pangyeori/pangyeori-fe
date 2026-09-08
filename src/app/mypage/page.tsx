@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/features/auth/context/AuthProvider";
 import { useSignOut } from "@/features/auth/hooks/useSignOut";
 import { PastDebatesSkeleton } from "@/features/mypage/components/PastDebatesSkeleton";
-import { ProfileAvatar } from "@/features/mypage/components/ProfileAvatar";
+import { ProfileImageEditor } from "@/features/mypage/components/ProfileImageEditor";
 import { ProfileSkeleton } from "@/features/mypage/components/ProfileSkeleton";
 import { useMyProfile } from "@/features/mypage/hooks/useMyProfile";
 import { ApiError } from "@/lib/api/client";
@@ -116,7 +116,8 @@ export default function MyPage() {
               </Link>
             </div>
             <div className="mt-8 flex flex-col items-center gap-6 sm:flex-row sm:gap-8">
-              <ProfileAvatar
+              <ProfileImageEditor
+                compact
                 nickname={profileQuery.data.nickname}
                 profileImageUrl={profileQuery.data.profileImageUrl}
               />

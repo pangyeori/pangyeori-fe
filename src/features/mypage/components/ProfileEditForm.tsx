@@ -4,8 +4,8 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -14,14 +14,6 @@ import { checkNicknameDuplicate } from "@/features/auth/api/nickname";
 import { FormAlert } from "@/features/auth/components/shared/AuthFormChrome";
 import { useAuth } from "@/features/auth/context/AuthProvider";
 import { updateProfile } from "@/features/mypage/api/account";
-import {
-  createProfileImageUploadUrl,
-  deleteProfileImage,
-  PROFILE_IMAGE_ACCEPT,
-  uploadProfileImageToStorage,
-  validateProfileImage,
-} from "@/features/mypage/api/profileImage";
-import { ProfileAvatar } from "@/features/mypage/components/ProfileAvatar";
 import { useAccountWithdrawal } from "@/features/mypage/hooks/useAccountSettings";
 import {
   nicknameUpdateSchema,
@@ -34,11 +26,6 @@ export function ProfileEditForm({ profile }: { profile: UserProfile }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { accessToken } = useAuth();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [removeImage, setRemoveImage] = useState(false);
-  const [imageError, setImageError] = useState<string | null>(null);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const withdrawal = useAccountWithdrawal();
@@ -47,15 +34,6 @@ export function ProfileEditForm({ profile }: { profile: UserProfile }) {
     mode: "onChange",
     defaultValues: { nickname: profile.nickname },
   });
-  const nickname = useWatch({ control: form.control, name: "nickname" });
-
-  useEffect(
-    () => () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
-    },
-    [previewUrl],
-  );
-
   const saveMutation = useMutation({
     mutationFn: async ({ nickname }: NicknameUpdateFormValues) => {
       if (!accessToken) throw new Error("로그인이 필요합니다.");
@@ -72,26 +50,8 @@ export function ProfileEditForm({ profile }: { profile: UserProfile }) {
         }
       }
 
-      let profileImageKey: string | undefined;
-      if (imageFile) {
-        const upload = await createProfileImageUploadUrl(imageFile, accessToken);
-        await uploadProfileImageToStorage(upload.uploadUrl, imageFile);
-        profileImageKey = upload.objectKey;
-      }
-
-      if (nextNickname !== profile.nickname || profileImageKey) {
-        await updateProfile(
-          {
-            ...(nextNickname !== profile.nickname
-              ? { nickname: nextNickname }
-              : {}),
-            ...(profileImageKey ? { profileImageKey } : {}),
-          },
-          accessToken,
-        );
-      }
-      if (removeImage && profile.profileImageKey) {
-        await deleteProfileImage(accessToken);
+      if (nextNickname !== profile.nickname) {
+        await updateProfile({ nickname: nextNickname }, accessToken);
       }
     },
     onSuccess: async () => {
@@ -100,30 +60,6 @@ export function ProfileEditForm({ profile }: { profile: UserProfile }) {
     },
   });
 
-  const handleImage = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    const message = validateProfileImage(file);
-    setImageError(message);
-    if (message) return;
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setImageFile(file);
-    setPreviewUrl(URL.createObjectURL(file));
-    setRemoveImage(false);
-    saveMutation.reset();
-  };
-
-  const resetImage = () => {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewUrl(null);
-    setImageFile(null);
-    setRemoveImage(true);
-    setImageError(null);
-    saveMutation.reset();
-  };
-
-  const shownImage = removeImage ? null : (previewUrl ?? profile.profileImageUrl);
   const errorMessage =
     saveMutation.error instanceof ApiError
       ? saveMutation.error.message
@@ -133,26 +69,6 @@ export function ProfileEditForm({ profile }: { profile: UserProfile }) {
     <>
       <form onSubmit={form.handleSubmit((values) => saveMutation.mutate(values))} noValidate>
         <section className="rounded-2xl border border-[var(--line)] bg-white p-6 shadow-[0_12px_40px_rgba(16,24,40,0.06)] sm:p-8">
-          <h2 className="text-base font-bold text-[var(--ink)]">프로필 이미지</h2>
-          <div className="mt-5 flex flex-col items-center gap-5 sm:flex-row sm:items-center sm:gap-8">
-            <ProfileAvatar nickname={nickname || profile.nickname} profileImageUrl={shownImage} />
-            <div className="text-center sm:text-left">
-              <div className="flex flex-wrap justify-center gap-2 sm:justify-start">
-                <Button type="button" variant="outline" className="!h-10 !w-auto" onClick={() => fileInputRef.current?.click()}>
-                  이미지 변경
-                </Button>
-                <Button type="button" variant="outline" className="!h-10 !w-auto" disabled={!shownImage} onClick={resetImage}>
-                  기본 이미지로
-                </Button>
-              </div>
-              <p className="mt-3 text-sm text-[var(--ink-muted)]">PNG, JPG, WebP · 최대 5MB</p>
-              {imageError ? <p className="mt-1 text-sm text-[var(--danger)]" role="alert">{imageError}</p> : null}
-            </div>
-          </div>
-          <input ref={fileInputRef} type="file" accept={PROFILE_IMAGE_ACCEPT} className="sr-only" onChange={handleImage} />
-        </section>
-
-        <section className="mt-5 rounded-2xl border border-[var(--line)] bg-white p-6 shadow-[0_12px_40px_rgba(16,24,40,0.06)] sm:p-8">
           <h2 className="text-base font-bold text-[var(--ink)]">기본 정보</h2>
           <div className="mt-5 grid gap-5">
             <Input label="닉네임" placeholder="변경할 닉네임을 입력해주세요." error={form.formState.errors.nickname?.message} {...form.register("nickname", { onChange: () => saveMutation.reset() })} />
