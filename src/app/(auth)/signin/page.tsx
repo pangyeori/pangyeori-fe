@@ -4,11 +4,11 @@ import { AuthLayout } from "@/components/layout/AuthLayout";
 import { SignInForm } from "@/features/auth/components/SignInForm";
 
 type SignInPageProps = {
-  searchParams: Promise<{ reason?: string }>;
+  searchParams: Promise<{ reason?: string; next?: string }>;
 };
 
 export default async function SignInPage({ searchParams }: SignInPageProps) {
-  const { reason } = await searchParams;
+  const { reason, next } = await searchParams;
   const notice =
     reason === "password-changed"
       ? "비밀번호가 변경되었습니다. 새 비밀번호로 다시 로그인해주세요."
@@ -36,7 +36,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
       }
       heroDescription="로그인하여 재판에 참여하고 AI 판사의 공정한 판결을 받아보세요"
     >
-      <SignInForm notice={notice} />
+      <SignInForm notice={notice} next={next} />
     </AuthLayout>
   );
 }

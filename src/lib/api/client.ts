@@ -43,6 +43,10 @@ function getBaseUrl() {
   return base.replace(/\/$/, "");
 }
 
+export function apiUrl(path: string) {
+  return `${getBaseUrl()}${path}`;
+}
+
 function isBackendEnvelope(body: unknown): body is BackendApiResponse {
   return Boolean(
     body &&
@@ -110,7 +114,7 @@ export async function apiClient<T>(
 
   let response: Response;
   try {
-    response = await fetch(`${getBaseUrl()}${path}`, {
+    response = await fetch(apiUrl(path), {
       method,
       headers,
       credentials: "include",

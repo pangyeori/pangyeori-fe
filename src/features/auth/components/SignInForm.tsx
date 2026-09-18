@@ -22,8 +22,8 @@ import {
 } from "@/features/auth/schemas/signInSchema";
 import { ApiError } from "@/lib/api/client";
 
-export function SignInForm({ notice }: { notice?: string }) {
-  const signInMutation = useSignIn();
+export function SignInForm({ notice, next }: { notice?: string; next?: string }) {
+  const signInMutation = useSignIn(next);
 
   const form = useForm<SignInFormValues>({
     resolver: zodResolver(signInSchema),
