@@ -12,6 +12,7 @@ import { useAuth } from "@/features/auth/context/AuthProvider";
 import { useDebateStatus } from "@/features/debates/hooks/useDebateStatus";
 import { cancelDebateRequest, getInvitation, requestDebate } from "@/features/debates/api/debates";
 import { DebateTimeBadges } from "@/features/debates/components/DebateTimeBadges";
+import { DebateRoomSkeleton } from "@/features/debates/components/DebateRoomSkeleton";
 import { useMyProfile } from "@/features/mypage/hooks/useMyProfile";
 import { requestAge } from "@/features/debates/candidateList";
 
@@ -80,9 +81,10 @@ export function JoinRoom({ inviteToken, debateId }: { inviteToken: string; debat
     if (accepted) router.replace("/debates/starting");
   }, [accepted, router]);
 
-  if (!isReady) return <p className="p-8 text-center">로그인 상태를 확인하고 있습니다.</p>;
+  if (!isReady) return <DebateRoomSkeleton />;
   if (!accessToken) return <p className="p-8 text-center">초대를 확인하려면 <Link className="underline" href={`/signin?next=${encodeURIComponent(`/debates/join?token=${inviteToken}${debateId ? `&debateId=${debateId}` : ""}`)}`}>로그인</Link>해주세요.</p>;
   if (!inviteToken) return <p className="p-8 text-center" role="alert">초대 링크가 올바르지 않습니다.</p>;
+  if (invitationQuery.isPending || (requested && statusQuery.isPending)) return <DebateRoomSkeleton />;
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-[var(--page-bg)]">

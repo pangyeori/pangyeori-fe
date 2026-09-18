@@ -4,20 +4,39 @@ export default function DebateStartingPage() {
   return (
     <div className="flex min-h-full flex-1 flex-col bg-[var(--page-bg)]">
       <SiteHeader />
-      <main className="flex flex-1 items-center justify-center px-5 py-16">
-        <section role="status" className="w-full max-w-lg rounded-2xl border border-[var(--line)] bg-white px-8 py-14 text-center shadow-[0_12px_40px_rgba(16,24,40,0.06)]">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-blue-50 text-[var(--brand-blue)]">
-            <svg className="h-8 w-8 motion-safe:animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" className="opacity-20" />
-              <path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-            </svg>
+      <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-12 sm:px-8 sm:py-16">
+        <div role="status" className="text-center">
+          <h1 className="text-3xl font-bold text-[var(--ink)]">곧 토론이 시작됩니다</h1>
+          <p className="mt-3 text-sm text-[var(--ink-muted)]">상대방과 연결되었습니다. 토론 페이지로 자동 이동합니다.</p>
+        </div>
+        <div aria-hidden="true" className="mt-10 grid gap-6 motion-safe:animate-pulse lg:grid-cols-[250px_1fr_200px]">
+          <div className="rounded-2xl border border-[var(--line)] bg-white p-6">
+            <div className="h-5 w-28 rounded bg-slate-200" />
+            <div className="mt-6 space-y-3">
+              {[1, 2, 3, 4].map((step) => <div key={step} className="h-16 rounded-xl bg-slate-100" />)}
+            </div>
           </div>
-          <h1 className="mt-3 text-2xl font-bold text-[var(--ink)] sm:text-3xl">곧 토론이 시작됩니다</h1>
-          <p className="mt-4 text-sm leading-6 text-[var(--ink-muted)]">
-            상대방과 연결되었습니다. 토론 페이지로 자동 이동합니다.
-          </p>
-          <p className="mt-8 text-xs text-[var(--ink-faint)]">토론 페이지가 준비되면 자동으로 연결됩니다.</p>
-        </section>
+          <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-white">
+            <div className="border-b border-[var(--line)] p-6">
+              <div className="h-6 w-3/4 rounded bg-slate-200" />
+              <div className="mt-4 h-3 w-full rounded bg-slate-100" />
+            </div>
+            <div className="space-y-6 p-6">
+              <div className="h-24 w-4/5 rounded-2xl bg-slate-100" />
+              <div className="ml-auto h-24 w-4/5 rounded-2xl bg-slate-200" />
+              <div className="h-24 w-4/5 rounded-2xl bg-slate-100" />
+            </div>
+            <div className="border-t border-[var(--line)] p-6"><div className="h-12 rounded-xl bg-slate-100" /></div>
+          </div>
+          <div className="space-y-4">
+            {[1, 2].map((card) => (
+              <div key={card} className="rounded-2xl border border-[var(--line)] bg-white p-5">
+                <div className="h-5 w-24 rounded bg-slate-200" />
+                <div className="mt-5 h-14 rounded-xl bg-slate-100" />
+              </div>
+            ))}
+          </div>
+        </div>
       </main>
     </div>
   );
