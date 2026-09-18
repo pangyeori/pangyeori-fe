@@ -78,12 +78,19 @@ export function JoinRoom({ inviteToken, debateId }: { inviteToken: string; debat
   const createdAge = requestAge(invitationQuery.data?.createdAt, invitationQuery.dataUpdatedAt);
 
   useEffect(() => {
+    if (isReady && !accessToken && inviteToken) {
+      const returnTo = `/debates/join?token=${encodeURIComponent(inviteToken)}${debateId ? `&debateId=${encodeURIComponent(debateId)}` : ""}`;
+      router.replace(`/signin?next=${encodeURIComponent(returnTo)}`);
+    }
+  }, [accessToken, debateId, inviteToken, isReady, router]);
+
+  useEffect(() => {
     if (accepted) router.replace("/debates/starting");
   }, [accepted, router]);
 
   if (!isReady) return <DebateRoomSkeleton />;
-  if (!accessToken) return <p className="p-8 text-center">초대를 확인하려면 <Link className="underline" href={`/signin?next=${encodeURIComponent(`/debates/join?token=${inviteToken}${debateId ? `&debateId=${debateId}` : ""}`)}`}>로그인</Link>해주세요.</p>;
   if (!inviteToken) return <p className="p-8 text-center" role="alert">초대 링크가 올바르지 않습니다.</p>;
+  if (!accessToken) return null;
   if (invitationQuery.isPending || (requested && statusQuery.isPending)) return <DebateRoomSkeleton />;
 
   return (

@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 import { SiteHeader } from "@/components/layout/SiteChrome";
 import { createDebate, type Position } from "@/features/debates/api/debates";
@@ -13,6 +12,10 @@ export default function NewDebatePage() {
   const { accessToken, isReady } = useAuth();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (isReady && !accessToken) router.replace("/signin?next=/debates/new");
+  }, [accessToken, isReady, router]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -35,24 +38,22 @@ export default function NewDebatePage() {
     }
   };
 
+  if (!isReady || !accessToken) return null;
+
   return (
     <div className="flex min-h-full flex-1 flex-col bg-[var(--page-bg)]">
       <SiteHeader />
       <main className="mx-auto w-full max-w-xl flex-1 px-5 py-12">
         <h1 className="text-2xl font-bold">토론방 만들기</h1>
-        {!isReady ? <p className="mt-6">로그인 상태를 확인하고 있습니다.</p> : !accessToken ? (
-          <p className="mt-6">토론방을 만들려면 <Link className="underline" href="/signin?next=/debates/new">로그인</Link>해주세요.</p>
-        ) : (
-          <form onSubmit={submit} className="mt-6 grid gap-4">
-            <label className="grid gap-1">토론 주제<input name="title" required defaultValue="AI는 인간의 창작물을 대체할 수 있는가?" className="rounded border p-2" /></label>
-            <label className="grid gap-1">설명<textarea name="description" defaultValue="AI 창작물의 가치와 인간 고유의 창의성에 대해 토론합니다." className="rounded border p-2" /></label>
-            <label className="grid gap-1">내 입장<select name="hostPosition" defaultValue="PROS" className="rounded border p-2"><option value="PROS">찬성</option><option value="CONS">반대</option></select></label>
-            <label className="grid gap-1">발언 시간(초)<input name="turnTimeSeconds" type="number" min="30" max="600" required defaultValue="180" className="rounded border p-2" /></label>
-            <label className="grid gap-1">자유 토론 시간(초)<input name="freeDebateTimeSeconds" type="number" min="60" max="1800" required defaultValue="600" className="rounded border p-2" /></label>
-            {error ? <p role="alert" className="text-red-600">{error}</p> : null}
-            <button disabled={busy} className="rounded bg-blue-600 p-3 font-semibold text-white disabled:opacity-50">{busy ? "생성 중…" : "토론방 생성"}</button>
-          </form>
-        )}
+        <form onSubmit={submit} className="mt-6 grid gap-4">
+          <label className="grid gap-1">토론 주제<input name="title" required defaultValue="AI는 인간의 창작물을 대체할 수 있는가?" className="rounded border p-2" /></label>
+          <label className="grid gap-1">설명<textarea name="description" defaultValue="AI 창작물의 가치와 인간 고유의 창의성에 대해 토론합니다." className="rounded border p-2" /></label>
+          <label className="grid gap-1">내 입장<select name="hostPosition" defaultValue="PROS" className="rounded border p-2"><option value="PROS">찬성</option><option value="CONS">반대</option></select></label>
+          <label className="grid gap-1">발언 시간(초)<input name="turnTimeSeconds" type="number" min="30" max="600" required defaultValue="180" className="rounded border p-2" /></label>
+          <label className="grid gap-1">자유 토론 시간(초)<input name="freeDebateTimeSeconds" type="number" min="60" max="1800" required defaultValue="600" className="rounded border p-2" /></label>
+          {error ? <p role="alert" className="text-red-600">{error}</p> : null}
+          <button disabled={busy} className="rounded bg-blue-600 p-3 font-semibold text-white disabled:opacity-50">{busy ? "생성 중…" : "토론방 생성"}</button>
+        </form>
       </main>
     </div>
   );
