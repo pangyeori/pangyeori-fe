@@ -3,15 +3,27 @@ import { z } from "zod";
 import { passwordSchema } from "@/features/auth/schemas/passwordSchema";
 import { nicknameSchema } from "@/features/auth/schemas/registerSchema";
 
+const currentPasswordSchema = z
+  .string()
+  .min(1, "현재 비밀번호를 입력해주세요.");
+
 export const nicknameUpdateSchema = z.object({
   nickname: nicknameSchema,
 });
 
 export type NicknameUpdateFormValues = z.infer<typeof nicknameUpdateSchema>;
 
+export const passwordVerificationSchema = z.object({
+  currentPassword: currentPasswordSchema,
+});
+
+export type PasswordVerificationFormValues = z.infer<
+  typeof passwordVerificationSchema
+>;
+
 export const passwordChangeSchema = z
   .object({
-    currentPassword: z.string().min(1, "현재 비밀번호를 입력해주세요."),
+    currentPassword: currentPasswordSchema,
     newPassword: passwordSchema,
     newPasswordConfirm: z
       .string()

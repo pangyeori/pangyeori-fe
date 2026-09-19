@@ -6,8 +6,10 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/features/auth/context/AuthProvider";
 import {
   changePassword,
+  verifyPassword,
   withdrawAccount,
   type ChangePasswordRequest,
+  type VerifyPasswordRequest,
 } from "@/features/mypage/api/account";
 
 function useFinishSession(reason: "password-changed" | "withdrawn") {
@@ -32,6 +34,17 @@ export function usePasswordChange() {
       await changePassword(body, accessToken);
     },
     onSuccess: finishSession,
+  });
+}
+
+export function usePasswordVerification() {
+  const { accessToken } = useAuth();
+
+  return useMutation({
+    mutationFn: async (body: VerifyPasswordRequest) => {
+      if (!accessToken) throw new Error("로그인이 필요합니다.");
+      await verifyPassword(body, accessToken);
+    },
   });
 }
 
