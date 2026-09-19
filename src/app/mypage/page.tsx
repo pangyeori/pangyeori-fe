@@ -109,7 +109,7 @@ export default function MyPage() {
             <div className="flex items-center justify-between gap-4">
               <h2 className="text-base font-bold text-[var(--ink)]">회원 정보</h2>
               <Link
-                href="/mypage/edit"
+                href="/mypage/verify-password"
                 className="rounded-lg border border-[var(--line)] bg-white px-4 py-2 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-muted)]"
               >
                 내 정보 수정

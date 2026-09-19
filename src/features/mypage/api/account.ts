@@ -11,6 +11,10 @@ export type ChangePasswordRequest = {
   newPassword: string;
 };
 
+export type VerifyPasswordRequest = {
+  currentPassword: string;
+};
+
 export function updateProfile(body: UpdateProfileRequest, token: string) {
   return apiClient<UserProfileResponse>("/api/v1/users/me", {
     method: "PATCH",
@@ -22,6 +26,14 @@ export function updateProfile(body: UpdateProfileRequest, token: string) {
 export function changePassword(body: ChangePasswordRequest, token: string) {
   return apiClient<void>("/api/v1/users/me/password", {
     method: "PATCH",
+    token,
+    body,
+  });
+}
+
+export function verifyPassword(body: VerifyPasswordRequest, token: string) {
+  return apiClient<void>("/api/v1/users/me/password/verify", {
+    method: "POST",
     token,
     body,
   });
