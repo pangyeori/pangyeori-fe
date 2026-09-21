@@ -1,60 +1,94 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useState, type FormEvent } from "react";
+import Link from "next/link";
 
-import { SiteHeader } from "@/components/layout/SiteChrome";
-import { createDebate, type Position } from "@/features/debates/api/debates";
+import { SiteFooter, SiteHeader } from "@/components/layout/SiteChrome";
 import { useAuth } from "@/features/auth/context/AuthProvider";
+import { DebateCreateForm } from "@/features/debates/components/DebateCreateForm";
+
+function PageSkeleton() {
+  return (
+    <div
+      className="mx-auto w-full max-w-6xl animate-pulse px-5 py-10 sm:px-8 sm:py-14"
+      aria-label="로그인 상태 확인 중"
+      aria-busy="true"
+    >
+      <div className="h-4 w-28 rounded bg-slate-200" />
+      <div className="mt-3 h-9 w-64 max-w-full rounded bg-slate-200" />
+      <div className="mt-3 h-5 w-96 max-w-full rounded bg-slate-100" />
+      <div className="mt-10 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="h-[440px] rounded-2xl bg-white" />
+        <div className="h-80 rounded-2xl bg-white" />
+      </div>
+    </div>
+  );
+}
+
+function LoginRequired() {
+  return (
+    <main className="mx-auto flex w-full max-w-xl flex-1 items-center px-5 py-16 sm:px-8">
+      <section className="w-full rounded-2xl border border-[var(--line)] bg-white p-8 text-center shadow-[0_12px_40px_rgba(16,24,40,0.06)] sm:p-10">
+        <span
+          className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-2xl"
+          aria-hidden
+        >
+          💬
+        </span>
+        <h1 className="mt-5 text-2xl font-bold tracking-tight text-[var(--ink)]">
+          로그인 후 토론방을 만들 수 있어요
+        </h1>
+        <p className="mt-3 text-sm leading-6 text-[var(--ink-muted)]">
+          로그인하면 토론 주제를 정하고 상대방을 초대할 수 있습니다.
+        </p>
+        <Link
+          href="/signin?next=/debates/new"
+          className="mt-7 inline-flex h-12 items-center justify-center rounded-lg bg-[var(--btn-primary)] px-7 text-[15px] font-semibold text-white transition hover:bg-[var(--btn-primary-hover)]"
+        >
+          로그인하기
+        </Link>
+      </section>
+    </main>
+  );
+}
 
 export default function NewDebatePage() {
-  const router = useRouter();
   const { accessToken, isReady } = useAuth();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (isReady && !accessToken) router.replace("/signin?next=/debates/new");
-  }, [accessToken, isReady, router]);
-
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!accessToken) return;
-    const form = new FormData(event.currentTarget);
-    setBusy(true);
-    setError("");
-    try {
-      const debate = await createDebate(accessToken, {
-        title: String(form.get("title") ?? "").trim(),
-        description: String(form.get("description") ?? "").trim() || undefined,
-        hostPosition: String(form.get("hostPosition")) as Position,
-        turnTimeSeconds: Number(form.get("turnTimeSeconds")),
-        freeDebateTimeSeconds: Number(form.get("freeDebateTimeSeconds")),
-      });
-      router.push(`/debates/${encodeURIComponent(debate.id)}/waiting?token=${encodeURIComponent(debate.inviteToken)}`);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "토론방을 만들지 못했습니다.");
-      setBusy(false);
-    }
-  };
-
-  if (!isReady || !accessToken) return null;
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-[var(--page-bg)]">
-      <SiteHeader />
-      <main className="mx-auto w-full max-w-xl flex-1 px-5 py-12">
-        <h1 className="text-2xl font-bold">토론방 만들기</h1>
-        <form onSubmit={submit} className="mt-6 grid gap-4">
-          <label className="grid gap-1">토론 주제<input name="title" required defaultValue="AI는 인간의 창작물을 대체할 수 있는가?" className="rounded border p-2" /></label>
-          <label className="grid gap-1">설명<textarea name="description" defaultValue="AI 창작물의 가치와 인간 고유의 창의성에 대해 토론합니다." className="rounded border p-2" /></label>
-          <label className="grid gap-1">내 입장<select name="hostPosition" defaultValue="PROS" className="rounded border p-2"><option value="PROS">찬성</option><option value="CONS">반대</option></select></label>
-          <label className="grid gap-1">발언 시간(초)<input name="turnTimeSeconds" type="number" min="30" max="600" required defaultValue="180" className="rounded border p-2" /></label>
-          <label className="grid gap-1">자유 토론 시간(초)<input name="freeDebateTimeSeconds" type="number" min="60" max="1800" required defaultValue="600" className="rounded border p-2" /></label>
-          {error ? <p role="alert" className="text-red-600">{error}</p> : null}
-          <button disabled={busy} className="rounded bg-blue-600 p-3 font-semibold text-white disabled:opacity-50">{busy ? "생성 중…" : "토론방 생성"}</button>
-        </form>
-      </main>
+      <SiteHeader
+        rightSlot={
+          <Link
+            href="/"
+            className="text-sm font-semibold text-[var(--ink-muted)] transition hover:text-[var(--ink)]"
+          >
+            홈으로
+          </Link>
+        }
+      />
+
+      {!isReady ? (
+        <PageSkeleton />
+      ) : !accessToken ? (
+        <LoginRequired />
+      ) : (
+        <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-10 sm:px-8 sm:py-14">
+          <div className="mb-9">
+            <p className="text-sm font-semibold text-[var(--brand-blue)]">
+              새 토론
+            </p>
+            <h1 className="mt-2 text-3xl font-bold tracking-tight text-[var(--ink)] sm:text-4xl">
+              토론방 만들기
+            </h1>
+            <p className="mt-3 text-sm leading-6 text-[var(--ink-muted)] sm:text-base">
+              함께 이야기하고 싶은 주제와 토론 방식을 설정해주세요.
+            </p>
+          </div>
+          <DebateCreateForm accessToken={accessToken} />
+        </main>
+      )}
+
+      <SiteFooter />
     </div>
   );
 }
