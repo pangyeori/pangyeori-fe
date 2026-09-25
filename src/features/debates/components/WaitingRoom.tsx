@@ -201,17 +201,7 @@ export function WaitingRoom({ debateId, inviteToken }: { debateId: string; invit
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-[var(--page-bg)]">
-      <SiteHeader
-        rightSlot={
-          <button
-            type="button"
-            onClick={() => setExitOpen(true)}
-            className="rounded-lg border border-[var(--line)] bg-white px-4 py-2 text-sm font-semibold text-[var(--ink)] hover:bg-[var(--surface-muted)]"
-          >
-            나가기
-          </button>
-        }
-      />
+      <SiteHeader />
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-12 sm:px-8 sm:py-16">
         <div className="text-center">

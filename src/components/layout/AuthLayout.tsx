@@ -4,20 +4,18 @@ import { SiteFooter, SiteHeader } from "@/components/layout/SiteChrome";
 
 type AuthLayoutProps = {
   children: ReactNode;
-  headerRight?: ReactNode;
   heroTitle: ReactNode;
   heroDescription: string;
 };
 
 export function AuthLayout({
   children,
-  headerRight,
   heroTitle,
   heroDescription,
 }: AuthLayoutProps) {
   return (
     <div className="flex min-h-full flex-1 flex-col bg-[var(--page-bg)]">
-      <SiteHeader rightSlot={headerRight} />
+      <SiteHeader />
 
       <main className="mx-auto grid w-full max-w-6xl flex-1 items-center px-5 py-10 lg:grid-cols-2 lg:gap-14 lg:px-8 lg:py-14">
         <section className="auth-enter hidden lg:block">

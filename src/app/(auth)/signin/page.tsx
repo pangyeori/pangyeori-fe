@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 import { AuthLayout } from "@/components/layout/AuthLayout";
 import { SignInForm } from "@/features/auth/components/SignInForm";
 
@@ -18,14 +16,6 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
 
   return (
     <AuthLayout
-      headerRight={
-        <Link
-          href="/register"
-          className="rounded-lg border border-[var(--line)] bg-white px-4 py-2 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-muted)]"
-        >
-          회원가입
-        </Link>
-      }
       heroTitle={
         <>
           평등하고 객관적인{" "}

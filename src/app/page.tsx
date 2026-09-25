@@ -3,9 +3,7 @@
 import Link from "next/link";
 
 import { SiteFooter, SiteHeader } from "@/components/layout/SiteChrome";
-import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/features/auth/context/AuthProvider";
-import { useSignOut } from "@/features/auth/hooks/useSignOut";
 
 const steps = [
   ["01", "토론 주제를 정해요", "함께 이야기하고 싶은 주제와 내 입장을 선택해요."],
@@ -22,25 +20,12 @@ function ArrowIcon() {
 }
 
 export default function HomePage() {
-  const { isReady, isAuthenticated } = useAuth();
-  const signOutMutation = useSignOut();
+  const { isAuthenticated } = useAuth();
   const debateHref = isAuthenticated ? "/debates/new" : "/signin";
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-[var(--page-bg)]">
-      <SiteHeader
-        rightSlot={isReady && isAuthenticated ? (
-          <div className="flex items-center gap-2">
-            <Link href="/mypage" className="hidden rounded-lg px-3 py-2 text-sm font-semibold text-[var(--ink-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--ink)] sm:block">마이페이지</Link>
-            <Button variant="outline" className="!h-10 !w-auto px-4" loading={signOutMutation.isPending} onClick={() => signOutMutation.mutate()}>로그아웃</Button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2">
-            <Link href="/signin" className="rounded-lg px-3 py-2 text-sm font-semibold text-[var(--ink-muted)] hover:text-[var(--ink)]">로그인</Link>
-            <Link href="/register" className="rounded-lg bg-[var(--btn-primary)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--btn-primary-hover)]">회원가입</Link>
-          </div>
-        )}
-      />
+      <SiteHeader />
 
       <main className="flex-1 overflow-hidden">
         <section className="relative border-b border-[var(--line)] bg-white">
