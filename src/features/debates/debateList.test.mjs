@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { debateStatusLabel, fetchRemainingDebatePages, isPastDebate } from "./debateList.ts";
+import { isHostInvitation } from "./roomSession.ts";
 
 test("debates are split into active and past sections with user-facing badges", () => {
   assert.equal(debateStatusLabel("WAITING"), "토론 대기중");
@@ -17,4 +18,10 @@ test("expanding a section fetches every remaining cursor page", async () => {
   let calls = 0;
   await fetchRemainingDebatePages(true, async () => ({ hasNextPage: ++calls < 3 }));
   assert.equal(calls, 3);
+});
+
+test("only an accepted member in a waiting debate is treated as the host", () => {
+  assert.equal(isHostInvitation({ guestStatus: "ACCEPTED", debateStatus: "WAITING" }), true);
+  assert.equal(isHostInvitation({ guestStatus: "ACCEPTED", debateStatus: "READY" }), false);
+  assert.equal(isHostInvitation({ guestStatus: "PENDING", debateStatus: "WAITING" }), false);
 });

@@ -13,12 +13,11 @@ import { useDebateStatus } from "@/features/debates/hooks/useDebateStatus";
 import {
   cancelDebateRequest,
   getInvitation,
-  getMyDebates,
   requestDebate,
 } from "@/features/debates/api/debates";
 import { DebateTimeBadges } from "@/features/debates/components/DebateTimeBadges";
 import { DebateRoomSkeleton } from "@/features/debates/components/DebateRoomSkeleton";
-import { rememberDebateRoom } from "@/features/debates/roomSession";
+import { isHostInvitation, rememberDebateRoom } from "@/features/debates/roomSession";
 import { useMyProfile } from "@/features/mypage/hooks/useMyProfile";
 import { requestAge } from "@/features/debates/candidateList";
 
@@ -53,18 +52,9 @@ export function JoinRoom({ inviteToken, debateId }: { inviteToken: string; debat
   });
   const hostIsPros = invitationQuery.data?.guestPosition !== "PROS";
   const actualDebateId = invitationQuery.data?.debateId ?? debateId;
-  const hostRoomQuery = useQuery({
-    queryKey: ["debates", "me", "host", actualDebateId],
-    queryFn: async () => {
-      if (!accessToken || !actualDebateId) return null;
-      // ponytail: 초대 링크는 최근 방을 가리키므로 최대 페이지 1회 조회. 50개 밖 조회가 필요해지면 커서 순회로 확장한다.
-      const page = await getMyDebates(accessToken, null, { role: "HOST", pageSize: 50 });
-      return page.items.find((debate) => debate.debateId === actualDebateId) ?? null;
-    },
-    enabled: isReady && Boolean(accessToken && actualDebateId),
-  });
+  const hostInvitation = isHostInvitation(invitationQuery.data);
   const invitationStatus = invitationQuery.data?.guestStatus;
-  const statusDebateId = invitationStatus === "PENDING" || invitationStatus === "REJECTED" || invitationStatus === "ACCEPTED" || (invitationQuery.isError && debateId)
+  const statusDebateId = !hostInvitation && (invitationStatus === "PENDING" || invitationStatus === "REJECTED" || invitationStatus === "ACCEPTED" || (invitationQuery.isError && debateId))
     ? actualDebateId : null;
   const statusQuery = useDebateStatus(statusDebateId);
   const guestStatus = statusQuery.isSuccess ? statusQuery.data.guestStatus : invitationQuery.data?.guestStatus;
@@ -101,33 +91,32 @@ export function JoinRoom({ inviteToken, debateId }: { inviteToken: string; debat
   }, [accessToken, debateId, inviteToken, isReady, router]);
 
   useEffect(() => {
-    if (accepted) router.replace("/debates/starting");
-  }, [accepted, router]);
-
-  useEffect(() => {
-    const hostRoom = hostRoomQuery.data;
-    if (!hostRoom) return;
+    const invitation = invitationQuery.data;
+    if (!hostInvitation || !invitation) return;
     rememberDebateRoom({
-      debateId: hostRoom.debateId,
-      title: hostRoom.title,
-      description: hostRoom.description,
-      hostPosition: hostRoom.myPosition,
-      guestPosition: hostRoom.myPosition === "PROS" ? "CONS" : "PROS",
-      turnTimeSeconds: hostRoom.turnTimeSeconds,
-      freeDebateTimeSeconds: hostRoom.freeDebateTimeSeconds,
-      createdAt: hostRoom.createdAt,
+      debateId: invitation.debateId,
+      title: invitation.title,
+      description: invitation.description,
+      hostPosition: invitation.guestPosition === "PROS" ? "CONS" : "PROS",
+      guestPosition: invitation.guestPosition,
+      turnTimeSeconds: invitation.turnTimeSeconds,
+      freeDebateTimeSeconds: invitation.freeDebateTimeSeconds,
+      createdAt: invitation.createdAt,
       inviteToken,
     });
-    router.replace(`/debates/${encodeURIComponent(hostRoom.debateId)}/waiting`);
-  }, [hostRoomQuery.data, inviteToken, router]);
+    router.replace(`/debates/${encodeURIComponent(invitation.debateId)}/waiting`);
+  }, [hostInvitation, invitationQuery.data, inviteToken, router]);
+
+  useEffect(() => {
+    if (accepted && !hostInvitation) router.replace("/debates/starting");
+  }, [accepted, hostInvitation, router]);
 
   if (!isReady) return <DebateRoomSkeleton />;
   if (!inviteToken) return <p className="p-8 text-center" role="alert">초대 링크가 올바르지 않습니다.</p>;
   if (!accessToken) return null;
   if (
     invitationQuery.isPending ||
-    (actualDebateId && hostRoomQuery.isPending) ||
-    hostRoomQuery.data ||
+    hostInvitation ||
     (requested && statusQuery.isPending)
   ) return <DebateRoomSkeleton />;
 

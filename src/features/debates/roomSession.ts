@@ -1,4 +1,4 @@
-import type { Position } from "@/features/debates/api/debates";
+import type { Invitation, Position } from "@/features/debates/api/debates";
 
 export type DebateRoomSnapshot = {
   debateId: string;
@@ -13,6 +13,10 @@ export type DebateRoomSnapshot = {
 };
 
 const key = (debateId: string) => `pangyeori:debate-room:${debateId}`;
+
+export function isHostInvitation(invitation: Invitation | undefined) {
+  return invitation?.guestStatus === "ACCEPTED" && invitation.debateStatus === "WAITING";
+}
 
 export function rememberDebateRoom(room: DebateRoomSnapshot) {
   if (typeof window === "undefined") return;
