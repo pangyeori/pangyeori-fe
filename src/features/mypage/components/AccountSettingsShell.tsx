@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 
@@ -37,16 +36,7 @@ export function AccountSettingsShell({
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-[var(--page-bg)]">
-      <SiteHeader
-        rightSlot={
-          <Link
-            href="/mypage"
-            className="text-sm font-semibold text-[var(--ink-muted)] underline-offset-4 hover:text-[var(--ink)] hover:underline"
-          >
-            마이페이지로
-          </Link>
-        }
-      />
+      <SiteHeader />
       <main className="mx-auto w-full max-w-4xl flex-1 px-5 py-10 sm:px-8 sm:py-14">
         <div className="mb-8">
           <p className="text-sm font-semibold text-[var(--ink-muted)]">내 계정</p>

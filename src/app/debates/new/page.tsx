@@ -60,26 +60,7 @@ export default function NewDebatePage() {
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-[var(--page-bg)]">
-      <SiteHeader
-        rightSlot={
-          accessToken ? (
-            <button
-              type="button"
-              className="text-sm font-semibold text-[var(--ink-muted)] transition hover:text-[var(--ink)]"
-              onClick={() => setExitOpen(true)}
-            >
-              나가기
-            </button>
-          ) : (
-            <Link
-              href="/"
-              className="text-sm font-semibold text-[var(--ink-muted)] transition hover:text-[var(--ink)]"
-            >
-              홈으로
-            </Link>
-          )
-        }
-      />
+      <SiteHeader />
 
       {!isReady ? (
         <PageSkeleton />

@@ -4,14 +4,12 @@ import { SiteFooter, SiteHeader } from "@/components/layout/SiteChrome";
 
 type AuthCenterLayoutProps = {
   children: ReactNode;
-  headerRight?: ReactNode;
   variant?: "default" | "modern";
 };
 
 /** 비밀번호 찾기처럼 중앙 정렬 폼용 레이아웃 */
 export function AuthCenterLayout({
   children,
-  headerRight,
   variant = "default",
 }: AuthCenterLayoutProps) {
   const isModern = variant === "modern";
@@ -24,7 +22,7 @@ export function AuthCenterLayout({
           : "bg-[var(--page-bg)]"
       }`}
     >
-      <SiteHeader rightSlot={headerRight} />
+      <SiteHeader />
       <main
         className={`mx-auto flex w-full flex-1 flex-col justify-center px-5 py-12 ${
           isModern ? "max-w-lg sm:py-16" : "max-w-md"

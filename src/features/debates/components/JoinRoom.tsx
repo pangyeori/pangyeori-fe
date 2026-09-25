@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -122,16 +121,7 @@ export function JoinRoom({ inviteToken, debateId }: { inviteToken: string; debat
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-[var(--page-bg)]">
-      <SiteHeader
-        rightSlot={
-          <Link
-            href="/"
-            className="rounded-lg border border-[var(--line)] bg-white px-4 py-2 text-sm font-semibold text-[var(--ink)] hover:bg-[var(--surface-muted)]"
-          >
-            나가기
-          </Link>
-        }
-      />
+      <SiteHeader />
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-12 sm:px-8 sm:py-16">
         <div className="text-center">

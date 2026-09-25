@@ -7,7 +7,6 @@ import { useEffect } from "react";
 import { SiteFooter, SiteHeader } from "@/components/layout/SiteChrome";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/features/auth/context/AuthProvider";
-import { useSignOut } from "@/features/auth/hooks/useSignOut";
 import { MyDebates } from "@/features/mypage/components/MyDebates";
 import { ProfileImageEditor } from "@/features/mypage/components/ProfileImageEditor";
 import { ProfileSkeleton } from "@/features/mypage/components/ProfileSkeleton";
@@ -26,7 +25,6 @@ export default function MyPage() {
   const router = useRouter();
   const { clearAuth, isAuthenticated, isReady } = useAuth();
   const profileQuery = useMyProfile();
-  const signOutMutation = useSignOut();
 
   const isUnauthorized =
     profileQuery.error instanceof ApiError &&
@@ -44,28 +42,7 @@ export default function MyPage() {
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-[var(--page-bg)]">
-      <SiteHeader
-        rightSlot={
-          isAuthenticated ? (
-            <Button
-              type="button"
-              variant="outline"
-              className="!h-10 !w-auto px-4"
-              loading={signOutMutation.isPending}
-              onClick={() => signOutMutation.mutate()}
-            >
-              로그아웃
-            </Button>
-          ) : (
-            <Link
-              href="/signin"
-              className="rounded-lg bg-[var(--btn-primary)] px-4 py-2 text-sm font-semibold text-white"
-            >
-              로그인
-            </Link>
-          )
-        }
-      />
+      <SiteHeader />
 
       <main className="mx-auto w-full max-w-3xl flex-1 px-5 py-10 sm:px-8 sm:py-14">
         <div className="mb-6 flex items-end justify-between gap-4">

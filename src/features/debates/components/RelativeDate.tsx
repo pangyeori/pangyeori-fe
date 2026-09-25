@@ -15,7 +15,7 @@ export function RelativeDate({ value, now, className = "" }: {
       dateTime={value}
       tabIndex={0}
       aria-label={`${age}, ${exact}`}
-      className={`group cursor-default focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-blue)] ${className}`}
+      className={`group w-fit cursor-default focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-blue)] ${className}`}
     >
       <span aria-hidden="true" className="group-hover:hidden group-focus:hidden">{age}</span>
       <span aria-hidden="true" className="hidden group-hover:inline group-focus:inline">{exact}</span>
