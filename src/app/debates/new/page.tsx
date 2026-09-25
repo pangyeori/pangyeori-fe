@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 
 import { SiteFooter, SiteHeader } from "@/components/layout/SiteChrome";
+import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
 import { useAuth } from "@/features/auth/context/AuthProvider";
 import { DebateCreateForm } from "@/features/debates/components/DebateCreateForm";
 
@@ -53,17 +56,28 @@ function LoginRequired() {
 
 export default function NewDebatePage() {
   const { accessToken, isReady } = useAuth();
+  const [exitOpen, setExitOpen] = useState(false);
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-[var(--page-bg)]">
       <SiteHeader
         rightSlot={
-          <Link
-            href="/"
-            className="text-sm font-semibold text-[var(--ink-muted)] transition hover:text-[var(--ink)]"
-          >
-            홈으로
-          </Link>
+          accessToken ? (
+            <button
+              type="button"
+              className="text-sm font-semibold text-[var(--ink-muted)] transition hover:text-[var(--ink)]"
+              onClick={() => setExitOpen(true)}
+            >
+              나가기
+            </button>
+          ) : (
+            <Link
+              href="/"
+              className="text-sm font-semibold text-[var(--ink-muted)] transition hover:text-[var(--ink)]"
+            >
+              홈으로
+            </Link>
+          )
         }
       />
 
@@ -84,11 +98,32 @@ export default function NewDebatePage() {
               함께 이야기하고 싶은 주제와 토론 방식을 설정해주세요.
             </p>
           </div>
-          <DebateCreateForm accessToken={accessToken} />
+          <DebateCreateForm accessToken={accessToken} onExit={() => setExitOpen(true)} />
         </main>
       )}
 
       <SiteFooter />
+
+      <Modal
+        open={exitOpen}
+        title="토론방 작성을 종료할까요?"
+        onClose={() => setExitOpen(false)}
+      >
+        <p>
+          지금 나가면 작성 중인 토론방 정보가 저장되지 않고 지워질 수 있습니다.
+        </p>
+        <div className="mt-6 flex gap-3">
+          <Button variant="outline" onClick={() => setExitOpen(false)}>
+            계속 작성
+          </Button>
+          <Link
+            href="/"
+            className="inline-flex h-12 w-full items-center justify-center rounded-lg bg-[var(--btn-primary)] px-5 text-[15px] font-semibold text-white hover:bg-[var(--btn-primary-hover)]"
+          >
+            나가기
+          </Link>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -10,9 +10,14 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { useAuth } from "@/features/auth/context/AuthProvider";
 import { useDebateStatus } from "@/features/debates/hooks/useDebateStatus";
-import { cancelDebateRequest, getInvitation, requestDebate } from "@/features/debates/api/debates";
+import {
+  cancelDebateRequest,
+  getInvitation,
+  requestDebate,
+} from "@/features/debates/api/debates";
 import { DebateTimeBadges } from "@/features/debates/components/DebateTimeBadges";
 import { DebateRoomSkeleton } from "@/features/debates/components/DebateRoomSkeleton";
+import { isHostInvitation, rememberDebateRoom } from "@/features/debates/roomSession";
 import { useMyProfile } from "@/features/mypage/hooks/useMyProfile";
 import { requestAge } from "@/features/debates/candidateList";
 
@@ -47,8 +52,9 @@ export function JoinRoom({ inviteToken, debateId }: { inviteToken: string; debat
   });
   const hostIsPros = invitationQuery.data?.guestPosition !== "PROS";
   const actualDebateId = invitationQuery.data?.debateId ?? debateId;
+  const hostInvitation = isHostInvitation(invitationQuery.data);
   const invitationStatus = invitationQuery.data?.guestStatus;
-  const statusDebateId = invitationStatus === "PENDING" || invitationStatus === "REJECTED" || invitationStatus === "ACCEPTED" || (invitationQuery.isError && debateId)
+  const statusDebateId = !hostInvitation && (invitationStatus === "PENDING" || invitationStatus === "REJECTED" || invitationStatus === "ACCEPTED" || (invitationQuery.isError && debateId))
     ? actualDebateId : null;
   const statusQuery = useDebateStatus(statusDebateId);
   const guestStatus = statusQuery.isSuccess ? statusQuery.data.guestStatus : invitationQuery.data?.guestStatus;
@@ -85,13 +91,34 @@ export function JoinRoom({ inviteToken, debateId }: { inviteToken: string; debat
   }, [accessToken, debateId, inviteToken, isReady, router]);
 
   useEffect(() => {
-    if (accepted) router.replace("/debates/starting");
-  }, [accepted, router]);
+    const invitation = invitationQuery.data;
+    if (!hostInvitation || !invitation) return;
+    rememberDebateRoom({
+      debateId: invitation.debateId,
+      title: invitation.title,
+      description: invitation.description,
+      hostPosition: invitation.guestPosition === "PROS" ? "CONS" : "PROS",
+      guestPosition: invitation.guestPosition,
+      turnTimeSeconds: invitation.turnTimeSeconds,
+      freeDebateTimeSeconds: invitation.freeDebateTimeSeconds,
+      createdAt: invitation.createdAt,
+      inviteToken,
+    });
+    router.replace(`/debates/${encodeURIComponent(invitation.debateId)}/waiting`);
+  }, [hostInvitation, invitationQuery.data, inviteToken, router]);
+
+  useEffect(() => {
+    if (accepted && !hostInvitation) router.replace("/debates/starting");
+  }, [accepted, hostInvitation, router]);
 
   if (!isReady) return <DebateRoomSkeleton />;
   if (!inviteToken) return <p className="p-8 text-center" role="alert">초대 링크가 올바르지 않습니다.</p>;
   if (!accessToken) return null;
-  if (invitationQuery.isPending || (requested && statusQuery.isPending)) return <DebateRoomSkeleton />;
+  if (
+    invitationQuery.isPending ||
+    hostInvitation ||
+    (requested && statusQuery.isPending)
+  ) return <DebateRoomSkeleton />;
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-[var(--page-bg)]">

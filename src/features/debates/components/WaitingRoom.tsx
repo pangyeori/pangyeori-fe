@@ -2,19 +2,26 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { SiteHeader } from "@/components/layout/SiteChrome";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { RefreshButton } from "@/components/ui/RefreshButton";
 import { useAuth } from "@/features/auth/context/AuthProvider";
 import { getInvitation, acceptDebateGuest } from "@/features/debates/api/debates";
 import { useDebateStatus } from "@/features/debates/hooks/useDebateStatus";
 import { DebateTimeBadges } from "@/features/debates/components/DebateTimeBadges";
 import { DebateRoomSkeleton } from "@/features/debates/components/DebateRoomSkeleton";
+import { RelativeDate } from "@/features/debates/components/RelativeDate";
+import {
+  readDebateRoom,
+  rememberDebateRoom,
+  type DebateRoomSnapshot,
+} from "@/features/debates/roomSession";
 import { useMyProfile } from "@/features/mypage/hooks/useMyProfile";
-import { getCandidatePage, requestAge } from "@/features/debates/candidateList";
+import { getCandidatePage } from "@/features/debates/candidateList";
 
 type Candidate = {
   id: string;
@@ -68,16 +75,21 @@ export function WaitingRoom({ debateId, inviteToken }: { debateId: string; invit
   const router = useRouter();
   const { accessToken, isReady } = useAuth();
   const profileQuery = useMyProfile();
+  const [roomSnapshot, setRoomSnapshot] = useState<DebateRoomSnapshot | null>(null);
+  const resolvedInviteToken = inviteToken || roomSnapshot?.inviteToken || "";
   const invitationQuery = useQuery({
-    queryKey: ["debate-invitations", inviteToken, accessToken],
-    queryFn: () => getInvitation(inviteToken, accessToken!),
-    enabled: isReady && Boolean(inviteToken && accessToken),
+    queryKey: ["debate-invitations", resolvedInviteToken, accessToken],
+    queryFn: () => getInvitation(resolvedInviteToken, accessToken!),
+    enabled: isReady && Boolean(resolvedInviteToken && accessToken),
   });
-  const hostIsPros = invitationQuery.data?.guestPosition !== "PROS";
+  const room = invitationQuery.data ?? roomSnapshot;
+  const hostIsPros = room?.guestPosition !== "PROS";
   const statusQuery = useDebateStatus(debateId);
-  const refreshIconRef = useRef<SVGSVGElement>(null);
-  const inviteUrl = `/debates/join?token=${encodeURIComponent(inviteToken)}&debateId=${encodeURIComponent(debateId)}`;
-  const [shareOpen, setShareOpen] = useState(true);
+  const inviteUrl = resolvedInviteToken
+    ? `/debates/join?token=${encodeURIComponent(resolvedInviteToken)}&debateId=${encodeURIComponent(debateId)}`
+    : "";
+  const [shareOpen, setShareOpen] = useState(false);
+  const [exitOpen, setExitOpen] = useState(false);
   const [linkShared, setLinkShared] = useState(false);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">(
     "idle",
@@ -87,7 +99,6 @@ export function WaitingRoom({ debateId, inviteToken }: { debateId: string; invit
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [busy, setBusy] = useState(false);
-  const [refreshingManually, setRefreshingManually] = useState(false);
   const [actionError, setActionError] = useState("");
   const confirmed = statusQuery.data?.debateStatus === "READY";
   const opponent = selectedOpponent && (confirmed || !statusQuery.data?.requestList ||
@@ -97,10 +108,31 @@ export function WaitingRoom({ debateId, inviteToken }: { debateId: string; invit
       .filter(({ userId }) => userId !== opponent?.id)
       .map(({ userId, nickname, requestedAt }) => ({ id: userId, name: nickname, requestedAt }));
   const { total, pageCount, currentPage, visible: visibleCandidates } = getCandidatePage(candidates, search, page);
-  const createdAge = requestAge(invitationQuery.data?.createdAt, invitationQuery.dataUpdatedAt);
+  const roomUpdatedAt = invitationQuery.dataUpdatedAt || statusQuery.dataUpdatedAt;
 
   const completedStep = confirmed ? 3 : opponent ? 2 : linkShared || candidates.length > 0 ? 1 : 0;
   const currentStep = Math.min(completedStep + 1, 3);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setRoomSnapshot(readDebateRoom(debateId)));
+    return () => cancelAnimationFrame(frame);
+  }, [debateId]);
+
+  useEffect(() => {
+    const invitation = invitationQuery.data;
+    if (!invitation || !resolvedInviteToken) return;
+    rememberDebateRoom({
+      debateId,
+      title: invitation.title,
+      description: invitation.description,
+      hostPosition: invitation.guestPosition === "PROS" ? "CONS" : "PROS",
+      guestPosition: invitation.guestPosition,
+      turnTimeSeconds: invitation.turnTimeSeconds,
+      freeDebateTimeSeconds: invitation.freeDebateTimeSeconds,
+      createdAt: invitation.createdAt,
+      inviteToken: resolvedInviteToken,
+    });
+  }, [debateId, invitationQuery.data, resolvedInviteToken]);
 
   useEffect(() => {
     if (!toastVisible) return;
@@ -113,6 +145,10 @@ export function WaitingRoom({ debateId, inviteToken }: { debateId: string; invit
   }, [confirmed, router]);
 
   const openShareModal = () => {
+    if (!inviteUrl) {
+      setActionError("초대 링크를 다시 불러오는 기능은 준비 중입니다.");
+      return;
+    }
     setCopyState("idle");
     setToastVisible(false);
     setShareOpen(true);
@@ -160,20 +196,20 @@ export function WaitingRoom({ debateId, inviteToken }: { debateId: string; invit
   };
 
   if (!isReady) return <DebateRoomSkeleton />;
-  if (!accessToken) return <p className="p-8 text-center">토론방을 보려면 <Link className="underline" href={`/signin?next=${encodeURIComponent(`/debates/${debateId}/waiting?token=${inviteToken}`)}`}>로그인</Link>해주세요.</p>;
-  if (!inviteToken) return <p className="p-8 text-center" role="alert">초대 링크 정보가 없습니다. 토론방을 다시 생성해주세요.</p>;
-  if (invitationQuery.isPending) return <DebateRoomSkeleton />;
+  if (!accessToken) return <p className="p-8 text-center">토론방을 보려면 <Link className="underline" href={`/signin?next=${encodeURIComponent(`/debates/${debateId}/waiting`)}`}>로그인</Link>해주세요.</p>;
+  if (resolvedInviteToken && !room && invitationQuery.isPending) return <DebateRoomSkeleton />;
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-[var(--page-bg)]">
       <SiteHeader
         rightSlot={
-          <Link
-            href="/"
+          <button
+            type="button"
+            onClick={() => setExitOpen(true)}
             className="rounded-lg border border-[var(--line)] bg-white px-4 py-2 text-sm font-semibold text-[var(--ink)] hover:bg-[var(--surface-muted)]"
           >
             나가기
-          </Link>
+          </button>
         }
       />
 
@@ -243,6 +279,15 @@ export function WaitingRoom({ debateId, inviteToken }: { debateId: string; invit
                 );
               })}
             </ol>
+            <div className="mt-5 flex gap-2 border-t border-[var(--line)] pt-5">
+              <button
+                type="button"
+                onClick={() => setExitOpen(true)}
+                className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-[var(--line)] bg-white px-3 text-sm font-semibold text-[var(--ink)] hover:bg-[var(--surface-muted)]"
+              >
+                나가기
+              </button>
+            </div>
           </aside>
 
           <div className="space-y-6">
@@ -260,21 +305,23 @@ export function WaitingRoom({ debateId, inviteToken }: { debateId: string; invit
                                         ? "참여자 선택 중"
                                         : "링크 공유 대기"}
                           </span>
-                      {createdAge ? (
-                          <span className="text-sm font-semibold text-[var(--ink-muted)]">
-                              {createdAge}
-                            </span>
+                      {room?.createdAt && roomUpdatedAt ? (
+                        <RelativeDate
+                          value={room.createdAt}
+                          now={roomUpdatedAt}
+                          className="text-sm font-semibold text-[var(--ink-muted)]"
+                        />
                       ) : null}
                     </div>
                     <h2 className="mt-4 text-2xl font-bold leading-9 tracking-tight text-[var(--ink)] [overflow-wrap:anywhere]">
-                      {invitationQuery.data?.title ?? "토론 정보를 불러오고 있습니다."}
+                      {room?.title ?? "토론 대기실"}
                     </h2>
                     <p className="mt-2 text-sm leading-6 text-[var(--ink-muted)]">
-                      {invitationQuery.data?.description}
+                      {room?.description}
                     </p>
                   </div>
                   <div className="xl:shrink-0">
-                    <DebateTimeBadges turnTimeSeconds={invitationQuery.data?.turnTimeSeconds} freeDebateTimeSeconds={invitationQuery.data?.freeDebateTimeSeconds} />
+                    <DebateTimeBadges turnTimeSeconds={room?.turnTimeSeconds} freeDebateTimeSeconds={room?.freeDebateTimeSeconds} />
                   </div>
                 </div>
               </div>
@@ -284,7 +331,7 @@ export function WaitingRoom({ debateId, inviteToken }: { debateId: string; invit
                 <div className="mt-4 grid items-stretch gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
                   <div className={`rounded-2xl border p-5 ${hostIsPros ? "border-blue-200 bg-blue-50" : "border-rose-200 bg-rose-50"}`}>
                     <p className={`text-sm font-bold ${hostIsPros ? "text-blue-600" : "text-rose-600"}`}>
-                      {invitationQuery.data?.guestPosition === "PROS" ? "반대" : "찬성"} 진영 <span className="text-[var(--ink)]">(나)</span>
+                      {room?.guestPosition === "PROS" ? "반대" : "찬성"} 진영 <span className="text-[var(--ink)]">(나)</span>
                     </p>
                     <div className="mt-5 flex items-center gap-3">
                       <span className={`flex h-11 w-11 items-center justify-center rounded-full font-bold text-white ${hostIsPros ? "bg-[var(--brand-blue)]" : "bg-rose-500"}`}>나</span>
@@ -300,7 +347,7 @@ export function WaitingRoom({ debateId, inviteToken }: { debateId: string; invit
                   {opponent ? (
                     <div className={`rounded-2xl border-2 p-5 ${hostIsPros ? "border-rose-300 bg-rose-50 shadow-[0_8px_24px_rgba(244,63,94,0.12)]" : "border-blue-300 bg-blue-50 shadow-[0_8px_24px_rgba(37,99,235,0.12)]"}`}>
                       <div className="flex items-center justify-between gap-2">
-                        <p className={`text-sm font-bold ${hostIsPros ? "text-rose-600" : "text-blue-600"}`}>{invitationQuery.data?.guestPosition === "PROS" ? "찬성" : "반대"} 진영</p>
+                        <p className={`text-sm font-bold ${hostIsPros ? "text-rose-600" : "text-blue-600"}`}>{room?.guestPosition === "PROS" ? "찬성" : "반대"} 진영</p>
                         <button
                           type="button"
                           className={`text-xs font-semibold underline-offset-4 hover:underline ${hostIsPros ? "text-rose-600" : "text-blue-600"}`}
@@ -323,7 +370,7 @@ export function WaitingRoom({ debateId, inviteToken }: { debateId: string; invit
                     <div className="flex min-h-32 items-center justify-center rounded-2xl border border-dashed border-[var(--line-strong)] bg-[var(--surface-muted)] p-5 text-center">
                       <div>
                         <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-white text-4xl text-[var(--ink-faint)]">+</span>
-                        <p className="mt-3 text-sm font-semibold text-[var(--ink-muted)]">{invitationQuery.data?.guestPosition === "PROS" ? "찬성" : "반대"} 진영을 선택해주세요</p>
+                        <p className="mt-3 text-sm font-semibold text-[var(--ink-muted)]">{room?.guestPosition === "PROS" ? "찬성" : "반대"} 진영을 선택해주세요</p>
                       </div>
                     </div>
                   )}
@@ -371,33 +418,7 @@ export function WaitingRoom({ debateId, inviteToken }: { debateId: string; invit
                     placeholder="닉네임으로 검색"
                     className="h-11 min-w-0 flex-1 rounded-xl border border-[var(--line)] bg-white px-4 text-sm text-[var(--ink)] outline-none focus:border-[var(--brand-blue)] sm:w-56"
                   />
-                  <button
-                    type="button"
-                    className="group flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[var(--ink-muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-blue)] disabled:opacity-40"
-                    aria-label="참여 신청 목록 새로고침"
-                    title="새로고침"
-                    disabled={refreshingManually}
-                    onClick={async () => {
-                      setRefreshingManually(true);
-                      if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-                        refreshIconRef.current?.animate(
-                          [{ transform: "rotate(0deg)" }, { transform: "rotate(360deg)" }],
-                          { duration: 600, easing: "ease-in-out" },
-                        );
-                      }
-                      try {
-                        await statusQuery.refetch();
-                      } finally {
-                        setRefreshingManually(false);
-                      }
-                    }}
-                  >
-                    <span className="flex h-[22px] w-[22px] origin-center items-center justify-center motion-safe:transition-transform motion-safe:duration-200 motion-safe:group-hover:rotate-[30deg]">
-                      <svg ref={refreshIconRef} width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ transformBox: "view-box", transformOrigin: "center" }}>
-                        <path d="M20 12a8 8 0 1 1-1.1-4M15.4 8h3.5V4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </span>
-                  </button>
+                  <RefreshButton label="참여 신청 목록 새로고침" onRefresh={() => statusQuery.refetch()} />
                 </div>
               </div>
 
@@ -417,7 +438,6 @@ export function WaitingRoom({ debateId, inviteToken }: { debateId: string; invit
               ) : visibleCandidates.length > 0 ? (
                 <ul className="mt-6 divide-y divide-[var(--line)] border-y border-[var(--line)]">
                   {visibleCandidates.map((candidate) => {
-                    const age = requestAge(candidate.requestedAt, statusQuery.dataUpdatedAt);
                     return (
                       <li key={candidate.id} className="flex items-center justify-between gap-4 py-5">
                         <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -427,11 +447,13 @@ export function WaitingRoom({ debateId, inviteToken }: { debateId: string; invit
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
                               <p className="font-bold text-[var(--ink)]">{candidate.name}</p>
-                              <span className={`rounded-full px-2 py-1 text-xs font-bold ${hostIsPros ? "bg-rose-100 text-rose-600" : "bg-blue-100 text-blue-600"}`}>{invitationQuery.data?.guestPosition === "PROS" ? "찬성" : "반대"}</span>
+                              <span className={`rounded-full px-2 py-1 text-xs font-bold ${hostIsPros ? "bg-rose-100 text-rose-600" : "bg-blue-100 text-blue-600"}`}>{room?.guestPosition === "PROS" ? "찬성" : "반대"}</span>
                             </div>
-                            {age && (
-                              <p className="mt-1 text-xs text-[var(--ink-muted)]">{age}</p>
-                            )}
+                            <RelativeDate
+                              value={candidate.requestedAt}
+                              now={statusQuery.dataUpdatedAt}
+                              className="mt-1 block text-xs text-[var(--ink-muted)]"
+                            />
                           </div>
                         </div>
                         <div className="shrink-0">
@@ -450,7 +472,7 @@ export function WaitingRoom({ debateId, inviteToken }: { debateId: string; invit
               ) : (
                 <div className="mt-6 flex flex-col items-center gap-4 rounded-xl bg-[var(--surface-muted)] px-5 py-10 text-center text-sm text-[var(--ink-muted)]">
                   <p>{search ? "검색 결과가 없습니다." : confirmed ? "토론 상대가 확정되었습니다." : opponent ? "선택한 참여자가 있습니다." : "아직 참여 신청이 없습니다."}</p>
-                  {!search && !confirmed && !opponent ? (
+                  {!search && !confirmed && !opponent && inviteUrl ? (
                     <Button variant="outline" className="!h-9 !w-auto px-3 text-sm" onClick={openShareModal}>
                       <CopyIcon />
                       초대 링크 공유
@@ -519,6 +541,29 @@ export function WaitingRoom({ debateId, inviteToken }: { debateId: string; invit
             링크를 복사하지 못했습니다. 다시 시도해주세요.
           </p>
         ) : null}
+      </Modal>
+
+      <Modal
+        open={exitOpen}
+        title="대기실에서 나갈까요?"
+        onClose={() => setExitOpen(false)}
+      >
+        <p className="text-center">
+          나가더라도 생성한 토론방은 삭제되지 않으며,
+          <br />
+          마이페이지에서 다시 들어올 수 있습니다.
+        </p>
+        <div className="mt-6 flex gap-3">
+          <Button variant="outline" onClick={() => setExitOpen(false)}>
+            계속 기다리기
+          </Button>
+          <Link
+            href="/"
+            className="inline-flex h-12 w-full items-center justify-center rounded-lg bg-[var(--btn-primary)] px-5 text-[15px] font-semibold text-white hover:bg-[var(--btn-primary-hover)]"
+          >
+            나가기
+          </Link>
+        </div>
       </Modal>
     </div>
   );

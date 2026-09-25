@@ -8,7 +8,7 @@ import { SiteFooter, SiteHeader } from "@/components/layout/SiteChrome";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/features/auth/context/AuthProvider";
 import { useSignOut } from "@/features/auth/hooks/useSignOut";
-import { PastDebatesSkeleton } from "@/features/mypage/components/PastDebatesSkeleton";
+import { MyDebates } from "@/features/mypage/components/MyDebates";
 import { ProfileImageEditor } from "@/features/mypage/components/ProfileImageEditor";
 import { ProfileSkeleton } from "@/features/mypage/components/ProfileSkeleton";
 import { useMyProfile } from "@/features/mypage/hooks/useMyProfile";
@@ -170,7 +170,7 @@ export default function MyPage() {
           </section>
         ) : null}
 
-        <PastDebatesSkeleton />
+        {isReady && isAuthenticated ? <MyDebates /> : null}
       </main>
 
       <SiteFooter />
