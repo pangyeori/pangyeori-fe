@@ -3,7 +3,6 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 
@@ -66,7 +65,10 @@ function StepTitle({ number, children }: { number: number; children: string }) {
   );
 }
 
-export function DebateCreateForm({ accessToken }: { accessToken: string }) {
+export function DebateCreateForm({ accessToken, onExit }: {
+  accessToken: string;
+  onExit: () => void;
+}) {
   const router = useRouter();
   const form = useForm<DebateCreateFormValues>({
     resolver: zodResolver(debateCreateSchema),
@@ -327,12 +329,13 @@ export function DebateCreateForm({ accessToken }: { accessToken: string }) {
           ) : null}
 
           <div className="mt-5 flex gap-3">
-            <Link
-              href="/"
+            <button
+              type="button"
+              onClick={onExit}
               className="inline-flex h-12 flex-1 items-center justify-center rounded-lg border border-[var(--line)] bg-white px-5 text-[15px] font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-muted)]"
             >
-              취소
-            </Link>
+              나가기
+            </button>
             <Button type="submit" className="flex-[1.5]" loading={createMutation.isPending}>
               토론방 만들기 <ArrowIcon />
             </Button>
