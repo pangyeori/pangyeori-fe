@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/features/auth/context/AuthProvider";
 import { useSignOut } from "@/features/auth/hooks/useSignOut";
+import { NotificationBell } from "@/features/notifications/components/NotificationBell";
 
 export function SiteHeader() {
   const { isAuthenticated, isReady } = useAuth();
@@ -22,6 +23,7 @@ export function SiteHeader() {
         <div className="h-10 w-40" aria-hidden="true" />
       ) : isAuthenticated ? (
         <div className="flex items-center gap-1 sm:gap-2">
+          <NotificationBell />
           <Link
             href="/mypage"
             className="rounded-lg px-2 py-2 text-sm font-semibold text-[var(--ink-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--ink)] sm:px-3"
