@@ -2,6 +2,14 @@ import { apiClient } from "@/lib/api/client";
 
 export type Position = "PROS" | "CONS";
 export type GuestStatus = "PENDING" | "REJECTED" | "CANCELLED" | "ACCEPTED" | null;
+export type DebateLifecycleStatus =
+  | "WAITING"
+  | "READY"
+  | "IN_PROGRESS"
+  | "PAUSED"
+  | "FINISHED"
+  | "CANCELLED";
+export type DebateRole = "HOST" | "GUEST";
 
 export type DebateStatus = {
   debateStatus: string;
@@ -40,6 +48,30 @@ export type CreatedDebate = {
   inviteToken: string;
 };
 
+export type MyDebate = {
+  debateId: string;
+  title: string;
+  description: string | null;
+  debateStatus: DebateLifecycleStatus;
+  currentStage: string;
+  myRole: DebateRole;
+  myPosition: Position;
+  opponent: {
+    userId: string;
+    nickname: string;
+    profileImageKey: string | null;
+  } | null;
+  turnTimeSeconds: number;
+  freeDebateTimeSeconds: number;
+  createdAt: string;
+};
+
+export type MyDebatesPage = {
+  items: MyDebate[];
+  nextCursor: string | null;
+  hasNext: boolean;
+};
+
 export function createDebate(token: string, body: {
   title: string;
   description?: string;
@@ -48,6 +80,17 @@ export function createDebate(token: string, body: {
   freeDebateTimeSeconds: number;
 }) {
   return apiClient<CreatedDebate>("/api/v1/debates", { method: "POST", token, body });
+}
+
+export function getMyDebates(
+  token: string,
+  cursor: string | null = null,
+  options: { role?: DebateRole; pageSize?: number } = {},
+) {
+  const query = new URLSearchParams({ pageSize: String(options.pageSize ?? 20) });
+  if (cursor) query.set("cursor", cursor);
+  if (options.role) query.set("role", options.role);
+  return apiClient<MyDebatesPage>(`/api/v1/debates/me?${query}`, { token });
 }
 
 export function getInvitation(inviteToken: string, token: string) {
