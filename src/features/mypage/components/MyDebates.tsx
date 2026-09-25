@@ -70,7 +70,7 @@ function DebateItem({ debate, now }: { debate: MyDebate; now: number }) {
           <Link
             href={`/debates/${encodeURIComponent(debate.debateId)}/waiting`}
             onClick={() => rememberHostRoom(debate)}
-            className="inline-flex h-10 items-center justify-center rounded-lg bg-[var(--btn-primary)] px-4 text-sm font-semibold text-white hover:bg-[var(--btn-primary-hover)]"
+            className="rounded-lg border border-[var(--line)] bg-white px-4 py-2 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-muted)]"
           >
             대기방 입장
           </Link>
