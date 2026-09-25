@@ -10,9 +10,15 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { useAuth } from "@/features/auth/context/AuthProvider";
 import { useDebateStatus } from "@/features/debates/hooks/useDebateStatus";
-import { cancelDebateRequest, getInvitation, requestDebate } from "@/features/debates/api/debates";
+import {
+  cancelDebateRequest,
+  getInvitation,
+  getMyDebates,
+  requestDebate,
+} from "@/features/debates/api/debates";
 import { DebateTimeBadges } from "@/features/debates/components/DebateTimeBadges";
 import { DebateRoomSkeleton } from "@/features/debates/components/DebateRoomSkeleton";
+import { rememberDebateRoom } from "@/features/debates/roomSession";
 import { useMyProfile } from "@/features/mypage/hooks/useMyProfile";
 import { requestAge } from "@/features/debates/candidateList";
 
@@ -47,6 +53,16 @@ export function JoinRoom({ inviteToken, debateId }: { inviteToken: string; debat
   });
   const hostIsPros = invitationQuery.data?.guestPosition !== "PROS";
   const actualDebateId = invitationQuery.data?.debateId ?? debateId;
+  const hostRoomQuery = useQuery({
+    queryKey: ["debates", "me", "host", actualDebateId],
+    queryFn: async () => {
+      if (!accessToken || !actualDebateId) return null;
+      // ponytail: 초대 링크는 최근 방을 가리키므로 최대 페이지 1회 조회. 50개 밖 조회가 필요해지면 커서 순회로 확장한다.
+      const page = await getMyDebates(accessToken, null, { role: "HOST", pageSize: 50 });
+      return page.items.find((debate) => debate.debateId === actualDebateId) ?? null;
+    },
+    enabled: isReady && Boolean(accessToken && actualDebateId),
+  });
   const invitationStatus = invitationQuery.data?.guestStatus;
   const statusDebateId = invitationStatus === "PENDING" || invitationStatus === "REJECTED" || invitationStatus === "ACCEPTED" || (invitationQuery.isError && debateId)
     ? actualDebateId : null;
@@ -88,10 +104,32 @@ export function JoinRoom({ inviteToken, debateId }: { inviteToken: string; debat
     if (accepted) router.replace("/debates/starting");
   }, [accepted, router]);
 
+  useEffect(() => {
+    const hostRoom = hostRoomQuery.data;
+    if (!hostRoom) return;
+    rememberDebateRoom({
+      debateId: hostRoom.debateId,
+      title: hostRoom.title,
+      description: hostRoom.description,
+      hostPosition: hostRoom.myPosition,
+      guestPosition: hostRoom.myPosition === "PROS" ? "CONS" : "PROS",
+      turnTimeSeconds: hostRoom.turnTimeSeconds,
+      freeDebateTimeSeconds: hostRoom.freeDebateTimeSeconds,
+      createdAt: hostRoom.createdAt,
+      inviteToken,
+    });
+    router.replace(`/debates/${encodeURIComponent(hostRoom.debateId)}/waiting`);
+  }, [hostRoomQuery.data, inviteToken, router]);
+
   if (!isReady) return <DebateRoomSkeleton />;
   if (!inviteToken) return <p className="p-8 text-center" role="alert">초대 링크가 올바르지 않습니다.</p>;
   if (!accessToken) return null;
-  if (invitationQuery.isPending || (requested && statusQuery.isPending)) return <DebateRoomSkeleton />;
+  if (
+    invitationQuery.isPending ||
+    (actualDebateId && hostRoomQuery.isPending) ||
+    hostRoomQuery.data ||
+    (requested && statusQuery.isPending)
+  ) return <DebateRoomSkeleton />;
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-[var(--page-bg)]">

@@ -14,6 +14,7 @@ import {
   debateCreateSchema,
   type DebateCreateFormValues,
 } from "@/features/debates/schemas/debateCreateSchema";
+import { rememberDebateRoom } from "@/features/debates/roomSession";
 
 const positionOptions = [
   {
@@ -103,9 +104,18 @@ export function DebateCreateForm({ accessToken }: { accessToken: string }) {
         freeDebateTimeSeconds: values.freeDebateTimeSeconds,
       }),
     onSuccess: (debate) => {
-      router.push(
-        `/debates/${encodeURIComponent(debate.id)}/waiting?token=${encodeURIComponent(debate.inviteToken)}`,
-      );
+      rememberDebateRoom({
+        debateId: debate.id,
+        title: debate.title,
+        description: debate.description,
+        hostPosition: debate.hostPosition,
+        guestPosition: debate.guestPosition,
+        turnTimeSeconds: debate.turnTimeSeconds,
+        freeDebateTimeSeconds: debate.freeDebateTimeSeconds,
+        createdAt: new Date().toISOString(),
+        inviteToken: debate.inviteToken,
+      });
+      router.push(`/debates/${encodeURIComponent(debate.id)}/waiting`);
     },
   });
 
