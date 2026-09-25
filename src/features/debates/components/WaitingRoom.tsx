@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { SiteHeader } from "@/components/layout/SiteChrome";
@@ -100,6 +100,7 @@ export function WaitingRoom({ debateId, inviteToken }: { debateId: string; invit
   const [page, setPage] = useState(1);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState("");
+  const autoOpenedShareFor = useRef<string | null>(null);
   const confirmed = statusQuery.data?.debateStatus === "READY";
   const opponent = selectedOpponent && (confirmed || !statusQuery.data?.requestList ||
     statusQuery.data.requestList.some(({ userId }) => userId === selectedOpponent.id))
@@ -112,6 +113,12 @@ export function WaitingRoom({ debateId, inviteToken }: { debateId: string; invit
 
   const completedStep = confirmed ? 3 : opponent ? 2 : linkShared || candidates.length > 0 ? 1 : 0;
   const currentStep = Math.min(completedStep + 1, 3);
+
+  useEffect(() => {
+    if (!statusQuery.isSuccess || currentStep !== 1 || !inviteUrl || autoOpenedShareFor.current === debateId) return;
+    autoOpenedShareFor.current = debateId;
+    setShareOpen(true);
+  }, [currentStep, debateId, inviteUrl, statusQuery.isSuccess]);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setRoomSnapshot(readDebateRoom(debateId)));
