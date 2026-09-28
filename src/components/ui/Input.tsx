@@ -58,6 +58,8 @@ type FieldShellProps = {
   error?: string;
   successMessage?: string;
   hideLabel?: boolean;
+  reserveFeedback?: boolean;
+  helperText?: string;
   children: ReactNode;
 };
 
@@ -67,6 +69,8 @@ export function FieldShell({
   error,
   successMessage,
   hideLabel = false,
+  reserveFeedback = false,
+  helperText,
   children,
 }: FieldShellProps) {
   return (
@@ -78,6 +82,7 @@ export function FieldShell({
         {label}
       </label>
       {children}
+      <div className={reserveFeedback ? "min-h-4 text-xs leading-4" : "contents"}>
       {error ? (
         <span
           id={htmlFor ? `${htmlFor}-error` : undefined}
@@ -88,7 +93,10 @@ export function FieldShell({
         </span>
       ) : successMessage ? (
         <span className="text-xs text-[var(--success-fg)]">{successMessage}</span>
+      ) : helperText ? (
+        <span id={htmlFor ? `${htmlFor}-hint` : undefined} className="text-xs text-[var(--ink-muted)]">{helperText}</span>
       ) : null}
+      </div>
     </div>
   );
 }
@@ -103,6 +111,8 @@ type InputProps = InputHTMLAttributes<HTMLInputElement> & {
   appearance?: FieldAppearance;
   showClear?: boolean;
   onClear?: () => void;
+  reserveFeedback?: boolean;
+  helperText?: string;
 };
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
@@ -116,6 +126,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
     appearance = "box",
     showClear = false,
     onClear,
+    reserveFeedback,
+    helperText,
     id,
     placeholder,
     className = "",
@@ -135,6 +147,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
       error={error}
       successMessage={!error && isValid ? successMessage : undefined}
       hideLabel={floatingLabel}
+      reserveFeedback={reserveFeedback}
+      helperText={helperText}
     >
       <div className="relative flex gap-2">
         <div className="relative min-w-0 flex-1">
@@ -153,7 +167,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
             } ${fieldToneClass(tone, appearance)} ${className}`}
             aria-invalid={Boolean(error)}
             aria-describedby={
-              error && inputId ? `${inputId}-error` : undefined
+              inputId ? error ? `${inputId}-error` : helperText && !isValid ? `${inputId}-hint` : undefined : undefined
             }
             {...props}
           />
