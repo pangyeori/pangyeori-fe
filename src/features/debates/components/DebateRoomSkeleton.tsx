@@ -1,4 +1,4 @@
-import { SiteHeader } from "@/components/layout/SiteChrome";
+import { SiteHeader } from "@/components/layout/SiteHeader";
 
 export function DebateRoomSkeleton() {
   return (

@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 
-import { SiteFooter, SiteHeader } from "@/components/layout/SiteChrome";
+import { SiteHeader } from "@/components/layout/SiteHeader";
 import { useAuth } from "@/features/auth/context/AuthProvider";
 import { ProfileSkeleton } from "@/features/mypage/components/ProfileSkeleton";
 import { useMyProfile } from "@/features/mypage/hooks/useMyProfile";
@@ -56,7 +56,6 @@ export function AccountSettingsShell({
           </section>
         ) : null}
       </main>
-      <SiteFooter />
     </div>
   );
 }

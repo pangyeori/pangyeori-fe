@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
-import { SiteFooter, SiteHeader } from "@/components/layout/SiteChrome";
+import { SiteHeader } from "@/components/layout/SiteHeader";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/features/auth/context/AuthProvider";
 import { MyDebates } from "@/features/mypage/components/MyDebates";
@@ -150,7 +150,6 @@ export default function MyPage() {
         {isReady && isAuthenticated ? <MyDebates /> : null}
       </main>
 
-      <SiteFooter />
     </div>
   );
 }

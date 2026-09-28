@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
-import { SiteFooter, SiteHeader } from "@/components/layout/SiteChrome";
+import { SiteFooter } from "@/components/layout/SiteFooter";
+import { SiteHeader } from "@/components/layout/SiteHeader";
 
 type AuthLayoutProps = {
   children: ReactNode;
