@@ -10,17 +10,29 @@ import { Input } from "@/components/ui/Input";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 import {
   AuthCardHeader,
-  AuthDivider,
   AuthSwitchLink,
   FormAlert,
 } from "@/features/auth/components/shared/AuthFormChrome";
-import { KakaoAuthButton } from "@/features/auth/components/shared/KakaoAuthButton";
 import { useSignIn } from "@/features/auth/hooks/useSignIn";
 import {
   signInSchema,
   type SignInFormValues,
 } from "@/features/auth/schemas/signInSchema";
 import { ApiError } from "@/lib/api/client";
+
+// Issue #28: 로그인 화면은 서버의 기술 메시지 대신 사용자 안내 문구를 사용한다.
+function getRequestError(error: Error | null) {
+  if (!error) return undefined;
+  if (error instanceof ApiError) {
+    if (error.status === 401 || error.code === "INVALID_CREDENTIALS") {
+      return "로그인에 실패했습니다. 이메일 또는 비밀번호를 확인해주세요.";
+    }
+    if (error.status === 429) {
+      return "로그인 시도가 많습니다. 잠시 후 다시 시도해주세요.";
+    }
+  }
+  return "로그인에 실패했습니다. 잠시 후 다시 시도해주세요.";
+}
 
 export function SignInForm({ notice, next }: { notice?: string; next?: string }) {
   const signInMutation = useSignIn(next);
@@ -49,87 +61,104 @@ export function SignInForm({ notice, next }: { notice?: string; next?: string })
     ? formState.errors.password?.message
     : undefined;
   const credentialError =
-    emailError && passwordError
+    emailError && passwordError && !email?.trim() && !password
       ? "이메일과 비밀번호를 입력해주세요."
       : emailError ?? passwordError;
 
-  const serverError =
-    signInMutation.error instanceof ApiError
-      ? signInMutation.error.message
-      : signInMutation.error
-        ? "로그인에 실패했습니다. 잠시 후 다시 시도해주세요."
-        : null;
+  const requestError = getRequestError(signInMutation.error);
+  const errorMessage = credentialError ?? requestError;
+  const errorDescription = errorMessage ? "signin-credentials-error" : undefined;
+  const invalidCredentials =
+    signInMutation.error instanceof ApiError &&
+    (signInMutation.error.status === 401 ||
+      signInMutation.error.code === "INVALID_CREDENTIALS");
+
+  function clearRequestError() {
+    if (signInMutation.error) signInMutation.reset();
+  }
 
   return (
     <form
       className="flex flex-col gap-4"
-      onSubmit={handleSubmit((values) => {
+      aria-busy={signInMutation.isPending}
+      onSubmit={(event) => {
+        if (signInMutation.isPending) {
+          event.preventDefault();
+          return;
+        }
         signInMutation.reset();
-        signInMutation.mutate({
-          email: values.email,
-          password: values.password,
-        });
-      })}
+        void handleSubmit((values) => signInMutation.mutate(values))(event);
+      }}
       noValidate
     >
-      <AuthCardHeader title="로그인" description="계정으로 로그인하세요" />
+      <AuthCardHeader title="로그인" description="다시 만나 반가워요. 토론을 이어가 볼까요?" />
 
       {notice ? <FormAlert tone="success">{notice}</FormAlert> : null}
 
-      <Input
-        label="이메일"
-        type="email"
-        autoComplete="email"
-        floatingLabel
-        appearance="underline"
-        showClear={Boolean(email)}
-        onClear={() => {
-          setValue("email", "", {
-            shouldDirty: true,
-            shouldValidate: formState.isSubmitted,
-          });
-          setFocus("email");
-        }}
-        aria-invalid={Boolean(emailError)}
-        aria-describedby={credentialError ? "signin-credentials-error" : undefined}
-        name={emailField.name}
-        onChange={emailField.onChange}
-        onBlur={emailField.onBlur}
-        ref={emailRef}
-      />
+      <fieldset disabled={signInMutation.isPending} className="contents">
+        <legend className="sr-only">로그인 정보</legend>
+        <Input
+          label="이메일"
+          type="email"
+          autoComplete="email"
+          autoCapitalize="none"
+          spellCheck={false}
+          floatingLabel
+          appearance="underline"
+          showClear={Boolean(email)}
+          onClear={() => {
+            clearRequestError();
+            setValue("email", "", {
+              shouldDirty: true,
+              shouldValidate: formState.isSubmitted,
+            });
+            setFocus("email");
+          }}
+          aria-invalid={Boolean(emailError) || invalidCredentials}
+          aria-describedby={errorDescription}
+          name={emailField.name}
+          onChange={(event) => {
+            clearRequestError();
+            void emailField.onChange(event);
+          }}
+          onBlur={emailField.onBlur}
+          ref={emailRef}
+        />
 
-      <PasswordInput
-        label="비밀번호"
-        autoComplete="current-password"
-        floatingLabel
-        appearance="underline"
-        showClear={Boolean(password)}
-        onClear={() => {
-          setValue("password", "", {
-            shouldDirty: true,
-            shouldValidate: formState.isSubmitted,
-          });
-          setFocus("password");
-        }}
-        aria-invalid={Boolean(passwordError)}
-        aria-describedby={credentialError ? "signin-credentials-error" : undefined}
-        name={passwordField.name}
-        onChange={passwordField.onChange}
-        onBlur={passwordField.onBlur}
-        ref={passwordRef}
-      />
+        <PasswordInput
+          label="비밀번호"
+          autoComplete="current-password"
+          floatingLabel
+          appearance="underline"
+          showClear={Boolean(password)}
+          onClear={() => {
+            clearRequestError();
+            setValue("password", "", {
+              shouldDirty: true,
+              shouldValidate: formState.isSubmitted,
+            });
+            setFocus("password");
+          }}
+          aria-invalid={Boolean(passwordError) || invalidCredentials}
+          aria-describedby={errorDescription}
+          name={passwordField.name}
+          onChange={(event) => {
+            clearRequestError();
+            void passwordField.onChange(event);
+          }}
+          onBlur={passwordField.onBlur}
+          ref={passwordRef}
+        />
+      </fieldset>
 
-      <div className="min-h-6">
-        {credentialError ? (
-          <p
-            id="signin-credentials-error"
-            className="whitespace-nowrap text-sm leading-6 text-[var(--danger)]"
-            role="alert"
-          >
-            {credentialError}
-          </p>
-        ) : null}
-      </div>
+      <p
+        id="signin-credentials-error"
+        className="min-h-15 break-keep text-[13px] leading-5 text-[var(--danger)] sm:min-h-10 sm:text-sm"
+        role="alert"
+        aria-atomic="true"
+      >
+        {errorMessage}
+      </p>
 
       <div className="flex justify-end">
         <Link
@@ -140,22 +169,18 @@ export function SignInForm({ notice, next }: { notice?: string; next?: string })
         </Link>
       </div>
 
-      {serverError ? <FormAlert>{serverError}</FormAlert> : null}
-
       <Button type="submit" loading={signInMutation.isPending}>
         로그인
       </Button>
 
-      <AuthDivider />
-
-      <KakaoAuthButton label="카카오계정으로 로그인" />
-
-      <AuthSwitchLink
-        prompt="아직 계정이 없으신가요?"
-        href="/register"
-        linkLabel="회원가입"
-        accent="danger"
-      />
+      <div className="pt-2">
+        <AuthSwitchLink
+          prompt="처음 오셨나요?"
+          href="/register"
+          linkLabel="회원가입"
+          accent="danger"
+        />
+      </div>
     </form>
   );
 }

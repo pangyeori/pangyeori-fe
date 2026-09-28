@@ -1,5 +1,6 @@
 import { AuthLayout } from "@/components/layout/AuthLayout";
 import { SignInForm } from "@/features/auth/components/SignInForm";
+import { SignInIntro } from "@/features/auth/components/SignInIntro";
 
 type SignInPageProps = {
   searchParams: Promise<{ reason?: string; next?: string }>;
@@ -15,17 +16,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
         : undefined;
 
   return (
-    <AuthLayout
-      heroTitle={
-        <>
-          평등하고 객관적인{" "}
-          <span className="text-[var(--brand-blue)]">AI 판사</span>와 함께{" "}
-          <span className="text-[var(--brand-blue)]">공정한 토론</span>을
-          시작하세요
-        </>
-      }
-      heroDescription="로그인하여 재판에 참여하고 AI 판사의 공정한 판결을 받아보세요"
-    >
+    <AuthLayout hero={<SignInIntro />}>
       <SignInForm notice={notice} next={next} />
     </AuthLayout>
   );

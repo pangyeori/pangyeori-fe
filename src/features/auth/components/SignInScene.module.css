@@ -1,0 +1,102 @@
+.scene {
+  --pointer-x: 0;
+  --pointer-y: 0;
+  position: relative;
+  flex-shrink: 0;
+  width: 96px;
+  user-select: none;
+}
+
+.stage { position: relative; }
+.layer:not(.mascot), .ground { display: none; }
+.image { width: 100%; height: auto; }
+
+@media (min-width: 640px) {
+  .scene { width: 112px; }
+}
+
+@media (min-width: 1024px) {
+  .scene { width: 100%; height: 350px; margin-top: 28px; perspective: 1000px; }
+  .stage {
+    width: 100%; height: 100%;
+    transform: rotateX(calc(var(--pointer-y) * -3deg)) rotateY(calc(var(--pointer-x) * 4deg));
+    transition: transform 550ms cubic-bezier(.2,.7,.2,1);
+  }
+  .layer {
+    --depth: 8px;
+    --tilt: 0deg;
+    position: absolute;
+    transform: translate(calc(var(--pointer-x) * var(--depth)), calc(var(--pointer-y) * var(--depth))) rotate(var(--tilt));
+    transition: transform 550ms cubic-bezier(.2,.7,.2,1);
+    pointer-events: none;
+  }
+  .layer:not(.mascot), .ground { display: block; }
+  .float { animation: float 6s ease-in-out infinite; }
+  .ground {
+    position: absolute; bottom: 6px; left: 28%; width: 44%; height: 22px;
+    background: radial-gradient(ellipse, #3e527a24, transparent 70%);
+    filter: blur(5px);
+  }
+  .halo { --depth: -5px; --tilt: -15deg; left: calc(50% - 132px); top: 66px; }
+  .ring {
+    width: 264px; height: 264px; border-radius: 50%;
+    border: 18px solid #e1e9f5;
+    background: radial-gradient(circle at 35% 25%, #ffffffb3, #dbeafe33 65%, transparent);
+    box-shadow: inset 3px 4px 6px #9eb1ce42, inset -3px -4px 5px #fff,
+      3px 6px 0 #c4d1e4, 5px 10px 0 #d1dceb, 10px 20px 30px #60799e1c, -3px -3px 6px #fff;
+    transform: rotateY(-22deg) rotateX(12deg);
+  }
+  .orbit { --depth: -9px; --tilt: -23deg; left: calc(50% - 169px); top: 137px; }
+  .orbitRing {
+    width: 338px; height: 134px; border: 1px solid #a9bddc80; border-radius: 50%;
+    box-shadow: 0 2px 0 #ffffffc9;
+  }
+  .thought { --depth: 15px; --tilt: -8deg; z-index: 3; left: 1%; top: 16px; width: 44%; }
+  .perspective { --depth: 10px; --tilt: 7deg; z-index: 2; right: 0; top: 65px; width: 43%; }
+  .card {
+    padding: 16px 17px; border: 1px solid #fff; border-radius: 18px 18px 18px 5px;
+    background: linear-gradient(135deg, #fff 25%, #f0f5fc);
+    box-shadow: 0 3px 0 #d7e0ed, 0 5px 0 #e1e7ef, 0 15px 25px -10px #3b507a38, inset 0 1px 0 white;
+  }
+  .perspective .card { border-radius: 18px 18px 5px 18px; animation-delay: -2.4s; animation-duration: 7s; }
+  .label { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; font-size: 11px; font-weight: 600; color: #64748b; }
+  .dot, .outlineDot { width: 7px; height: 7px; border-radius: 50%; }
+  .dot { background: var(--brand-blue); box-shadow: 0 1px 3px #2563eb40; }
+  .outlineDot { border: 1.5px solid #8493a9; }
+  .card p { font-size: 13px; font-weight: 500; color: var(--ink); word-break: keep-all; }
+  .mascot { --depth: 6px; z-index: 4; width: 240px; bottom: 13px; left: calc(50% - 120px); }
+  .mascot .float { animation-duration: 7.5s; animation-delay: -1.2s; }
+  .image { filter: drop-shadow(0 12px 9px #24365118); }
+  .sphere { --depth: 22px; z-index: 5; left: 8%; top: 183px; }
+  .sphere .float {
+    width: 27px; height: 27px; border-radius: 50%;
+    background: radial-gradient(circle at 30% 25%, #dcecff, #75a5ef 45%, #376dd0 80%);
+    box-shadow: 3px 7px 10px #2563eb21; animation-delay: -3s;
+  }
+  .smallSphere { --depth: -3px; right: 16%; bottom: 48px; }
+  .smallSphere .float {
+    width: 12px; height: 12px; border-radius: 50%;
+    background: radial-gradient(circle at 30% 25%, #fff, #cad6e7 60%, #95a6c1);
+    box-shadow: 2px 3px 5px #64748b20; animation-delay: -1s; animation-duration: 8s;
+  }
+  .cube { --depth: 18px; --tilt: 22deg; z-index: 5; right: 5%; top: 214px; }
+  .cube .float {
+    width: 23px; height: 23px; border-radius: 6px;
+    background: linear-gradient(135deg, #fff, #e0e8f5 65%, #b8c9e4);
+    box-shadow: 3px 3px 0 #aabedc, 4px 4px 0 #aabedc, 8px 10px 12px #526c9426, inset 1px 1px 0 white;
+    animation-duration: 7s; animation-delay: -4s;
+  }
+  .spark { --depth: 12px; --tilt: -12deg; left: 16%; bottom: 37px; color: #8ca5ca; font-size: 25px; text-shadow: 1px 2px 0 #fff; }
+  .spark .float { animation-delay: -4.5s; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@media (prefers-reduced-motion: reduce), (hover: none), (pointer: coarse) {
+  .float { animation: none; }
+  .stage { transform: none; transition: none; }
+  .layer { transform: rotate(var(--tilt, 0deg)); transition: none; }
+}
