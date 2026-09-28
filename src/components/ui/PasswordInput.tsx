@@ -20,6 +20,8 @@ type PasswordInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "type"> & 
   appearance?: FieldAppearance;
   showClear?: boolean;
   onClear?: () => void;
+  reserveFeedback?: boolean;
+  helperText?: string;
 };
 
 export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
@@ -33,6 +35,8 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
       appearance = "box",
       showClear = false,
       onClear,
+      reserveFeedback,
+      helperText,
       id,
       placeholder,
       className = "",
@@ -52,6 +56,8 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
         error={error}
         successMessage={!error && isValid ? successMessage : undefined}
         hideLabel={floatingLabel}
+        reserveFeedback={reserveFeedback}
+        helperText={helperText}
       >
         <div className="relative">
           <input
@@ -61,7 +67,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
             placeholder={floatingLabel ? " " : placeholder}
             className={`peer w-full border text-[15px] text-[var(--ink)] outline-none transition duration-200 placeholder:text-[var(--ink-faint)] ${showClear ? "pr-[5.5rem]" : "pr-11"} ${isUnderline ? "h-14 rounded-none border-x-0 border-t-0 bg-transparent pb-0.5 pl-0 focus:ring-0" : "h-12 rounded-lg bg-white px-3.5 focus:ring-2"} ${floatingLabel ? "pt-4.5" : ""} ${fieldToneClass(tone, appearance)} ${className}`}
             aria-invalid={Boolean(error)}
-            aria-describedby={error && inputId ? `${inputId}-error` : undefined}
+            aria-describedby={inputId ? error ? `${inputId}-error` : helperText && !isValid ? `${inputId}-hint` : undefined : undefined}
             {...props}
           />
           {floatingLabel ? (

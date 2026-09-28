@@ -1,0 +1,30 @@
+@media (min-width: 1024px) {
+  .scene { isolation: isolate; }
+  .frame { --depth: -5px; --tilt: 12deg; top: 78px; left: calc(50% - 128px); }
+  .frameShape {
+    width: 256px; height: 248px; border-radius: 75px; border: 17px solid #d6ebe4;
+    background: linear-gradient(145deg, #ffffffa6, #e3f2eb66);
+    box-shadow: inset 3px 4px 7px #799e9133, inset -3px -4px 5px #fff, 4px 6px 0 #b8d5cb, 6px 10px 0 #c9e1d7, 10px 20px 30px #537e671f, -3px -3px 6px white;
+    transform: rotateY(18deg) rotateX(8deg);
+  }
+  .outline { --depth: -9px; --tilt: -12deg; top: 67px; left: calc(50% - 143px); }
+  .outlineShape { width: 286px; height: 263px; border: 1px solid #a8cab780; border-radius: 85px; }
+  .welcome { --depth: 15px; --tilt: -7deg; z-index: 3; left: 0; top: 24px; width: 46%; }
+  .nameCard { --depth: 10px; --tilt: 8deg; z-index: 2; right: 0; top: 43px; width: 45%; }
+  .card {
+    padding: 15px 16px; border: 1px solid white; border-radius: 18px;
+    background: linear-gradient(135deg, white, #f0f8f4);
+    box-shadow: 0 3px 0 #cddfd7, 0 5px 0 #e0ebe5, 0 15px 25px -10px #42655338;
+  }
+  .nameCard .card { background: linear-gradient(135deg, white, #fff3e8); box-shadow: 0 3px 0 #ead6c3, 0 5px 0 #f2e5d8, 0 15px 25px -10px #77532c2b; animation-delay: -2.4s; animation-duration: 7s; }
+  .label { display: flex; align-items: center; gap: 7px; margin-bottom: 7px; font-size: 11px; font-weight: 600; color: #64776d; }
+  .badge { color: #32806b; font-size: 16px; }
+  .avatar { display: grid; place-items: center; width: 19px; height: 19px; border-radius: 6px; background: #f6dfc6; color: #9a6235; font-size: 15px; }
+  .card p { font-size: 13px; font-weight: 500; color: var(--ink); word-break: keep-all; }
+  .star { --depth: 20px; --tilt: -12deg; z-index: 5; left: 9%; top: 182px; font-size: 37px; color: #e9b86c; text-shadow: 2px 3px 0 #bc8848, 4px 8px 10px #bd88432b; }
+  .star > div { animation-delay: -3s; }
+  .pearl { --depth: 18px; right: 7%; top: 228px; }
+  .pearl > div { width: 25px; height: 25px; border-radius: 50%; background: radial-gradient(circle at 30% 25%, #f1fff9, #94cbbb 50%, #508b7b); box-shadow: 3px 7px 10px #356c5526; animation-delay: -1.5s; }
+  .confetti { --depth: 12px; --tilt: -25deg; left: 18%; bottom: 29px; }
+  .confetti > div { width: 13px; height: 24px; border-radius: 5px; background: linear-gradient(120deg, #fff3e4, #e9c39b); box-shadow: 2px 3px 0 #cfa879; animation-delay: -4s; }
+}

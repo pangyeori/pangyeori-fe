@@ -14,7 +14,7 @@ import {
 } from "react";
 
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { Input, type FieldAppearance } from "@/components/ui/Input";
 import {
   confirmEmailVerification,
   EMAIL_CODE_TTL_SECONDS,
@@ -38,6 +38,12 @@ type EmailVerifyFieldProps = {
   emailLabel?: string;
   emailPlaceholder?: string;
   timerPrefix?: string;
+  appearance?: FieldAppearance;
+  floatingLabel?: boolean;
+  reserveFeedback?: boolean;
+  onClear?: () => void;
+  compactVerification?: boolean;
+  onVerificationComplete?: () => void;
 };
 
 type PinTone = "idle" | "checking" | "success" | "error";
@@ -103,6 +109,12 @@ export function EmailVerifyField({
   emailLabel = "이메일",
   emailPlaceholder = "email@example.com",
   timerPrefix = "남은 시간",
+  appearance = "box",
+  floatingLabel = false,
+  reserveFeedback = false,
+  onClear,
+  compactVerification = false,
+  onVerificationComplete,
 }: EmailVerifyFieldProps) {
   const [code, setCode] = useState<string[]>(() => Array(6).fill(""));
   const [sent, setSent] = useState(false);
@@ -223,6 +235,7 @@ export function EmailVerifyField({
     if (confirmingRef.current) return;
 
     const requestedEmail = email;
+    const hadCodeFocus = codeInputRefs.current.some((input) => input === document.activeElement);
     setCodeError(null);
     setSendError(null);
     setPinTone("checking");
@@ -240,7 +253,9 @@ export function EmailVerifyField({
         successTimerRef.current = null;
         exitTimerRef.current = window.setTimeout(() => {
           if (currentEmailRef.current === requestedEmail) {
+            const canMoveFocus = document.activeElement === document.body || codeInputRefs.current.some((input) => input === document.activeElement);
             onVerifiedChange(true);
+            if (hadCodeFocus && canMoveFocus) onVerificationComplete?.();
           }
           exitTimerRef.current = null;
         }, 300);
@@ -259,7 +274,7 @@ export function EmailVerifyField({
       confirmingRef.current = false;
       setConfirming(false);
     }
-  }, [email, onVerifiedChange]);
+  }, [email, onVerifiedChange, onVerificationComplete]);
 
   const updateCode = useCallback(
     (nextCode: string[], focusIndex?: number) => {
@@ -343,34 +358,46 @@ export function EmailVerifyField({
 
   return (
     <div className="flex flex-col gap-3">
+      <div hidden={compactVerification && sent && !emailVerified}>
       <Input
         label={emailLabel}
+        appearance={appearance}
+        floatingLabel={floatingLabel}
+        reserveFeedback={reserveFeedback}
+        helperText={compactVerification ? "인증받을 이메일을 입력해주세요." : undefined}
+        showClear={Boolean(onClear && email && !emailVerified)}
+        onClear={() => {
+          resetVerificationUi();
+          onClear?.();
+        }}
+        autoCapitalize="none"
+        spellCheck={false}
         type="email"
         autoComplete="email"
         placeholder={emailPlaceholder}
         error={
-          emailFeedback?.tone === "error" ? emailFeedback.text : undefined
+          emailFeedback?.tone === "error" ? emailFeedback.text : compactVerification ? verifyRequiredError : undefined
         }
         isValid={
-          emailFeedback?.tone === "success"
+          compactVerification ? emailVerified : emailFeedback?.tone === "success"
             ? true
             : emailValid && !emailFeedback
         }
         successMessage={
           emailFeedback?.tone === "success" ? emailFeedback.text : undefined
         }
-        disabled={emailVerified}
+        disabled={emailVerified || (compactVerification && requesting)}
         className="disabled:cursor-not-allowed disabled:bg-[var(--surface-muted)] disabled:text-[var(--ink-muted)]"
         trailing={
           <Button
             type="button"
             variant="outline"
-            className="!h-12 !w-[96px] shrink-0 whitespace-nowrap px-2 !text-[13px] tabular-nums"
+            className={`${appearance === "underline" ? "mt-2" : ""} !h-12 !w-[96px] shrink-0 whitespace-nowrap px-2 !text-[13px] tabular-nums`}
             disabled={emailVerified || requesting || resendCooldown > 0}
             loading={requesting}
             onClick={handleRequest}
           >
-            {sent && !emailVerified ? (
+            {compactVerification && emailVerified ? "인증 완료" : sent && !emailVerified ? (
               resendCooldown > 0 ? (
                 <span className="inline-flex items-center justify-center whitespace-nowrap leading-none">
                   <span>재전송(</span>
@@ -393,12 +420,47 @@ export function EmailVerifyField({
         onFocus={onFocus}
         ref={inputRef}
       />
+      </div>
 
       {sent && !emailVerified ? (
         <div
-          className={`${pinExiting ? "pin-field-exit" : "pin-field-enter"} flex flex-col gap-2`}
-          aria-live="polite"
+          className={compactVerification ? "flex flex-col gap-1.5" : `${pinExiting ? "pin-field-exit" : "pin-field-enter"} flex flex-col gap-2`}
         >
+          {compactVerification ? (
+            <div className="relative flex h-14 items-end gap-2">
+              <div className="absolute inset-x-0 top-0 flex min-w-0 items-center justify-between gap-2 text-[11px] text-[var(--ink-muted)]">
+                <span className="truncate" title={email}>{email}</span>
+                <button type="button" disabled={requesting || confirming || pinTone === "success"} className="shrink-0 underline underline-offset-2 focus-visible:outline-2" onClick={() => {
+                  resetVerificationUi();
+                  window.requestAnimationFrame(() => document.getElementById(name)?.focus());
+                }}>이메일 변경</button>
+              </div>
+              <input
+                ref={(element) => { codeInputRefs.current[0] = element; }}
+                value={code.join("")}
+                onChange={(event) => {
+                  const digits = event.target.value.replace(/\D/g, "").slice(0, 6);
+                  updateCode(Array.from({ length: 6 }, (_, index) => digits[index] ?? ""));
+                }}
+                onFocus={(event) => event.currentTarget.select()}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]*"
+                maxLength={6}
+                size={6}
+                placeholder="000000"
+                disabled={confirming || requesting || pinTone === "success"}
+                className={`h-9 min-w-0 flex-1 rounded-md border bg-white px-2 text-center text-base font-semibold tracking-[0.12em] tabular-nums outline-none placeholder:font-normal placeholder:text-[var(--ink-faint)] focus:ring-1 ${codeError ? "border-[var(--danger)] focus:ring-[var(--danger)]" : "border-[var(--line-strong)] focus:border-[var(--ink-muted)] focus:ring-[var(--ink-muted)]"}`}
+                aria-invalid={Boolean(codeError)}
+                aria-describedby={`${name}-code-feedback`}
+                aria-label="이메일 인증번호 6자리"
+                onKeyDown={(event) => { if (event.key === "Enter") event.preventDefault(); }}
+              />
+              <Button type="button" variant="outline" className="!h-9 !w-[96px] shrink-0 whitespace-nowrap !px-2 !text-xs tabular-nums" disabled={requesting || confirming || pinTone === "success" || resendCooldown > 0} loading={requesting} onClick={handleRequest}>
+                {resendCooldown > 0 ? `재전송 ${resendCooldown}초` : "재전송"}
+              </Button>
+            </div>
+          ) : (
           <div className="grid grid-cols-6 gap-2">
             {code.map((digit, index) => (
               <input
@@ -429,24 +491,29 @@ export function EmailVerifyField({
               />
             ))}
           </div>
+          )}
+          <div id={`${name}-code-feedback`} className={compactVerification ? "min-h-4 text-xs leading-4" : "contents"}>
           {pinTone === "success" ? (
             <p className="text-xs font-medium text-[var(--success-fg)]" role="status">
               인증번호가 확인되었습니다.
             </p>
           ) : codeError ? (
             <p className="text-xs text-[var(--danger)]" role="alert">
-              {codeError} 처음 칸을 누르면 다시 입력할 수 있습니다.
+              {codeError}{compactVerification ? null : " 처음 칸을 누르면 다시 입력할 수 있습니다."}
             </p>
+          ) : compactVerification && sendError ? (
+            <p className="text-xs text-[var(--danger)]" role="alert">{sendError}</p>
           ) : (
             <p className="text-xs text-[var(--ink-muted)]">
               {confirming
-                ? "인증번호를 확인하고 있습니다."
-                : `${timerPrefix} ${formatSeconds(remaining)}`}
+                ? "인증번호를 확인하고 있어요."
+                : compactVerification ? `인증번호 6자리 · ${formatSeconds(remaining)}` : `${timerPrefix} ${formatSeconds(remaining)}`}
               {!confirming && remaining === 0
-                ? " · 만료되었습니다. 재전송해주세요."
+                ? compactVerification ? " · 재전송해주세요." : " · 만료되었습니다. 재전송해주세요."
                 : ""}
             </p>
           )}
+          </div>
         </div>
       ) : null}
     </div>

@@ -15,12 +15,10 @@ import { PasswordInput } from "@/components/ui/PasswordInput";
 import { checkNicknameDuplicate } from "@/features/auth/api/nickname";
 import {
   AuthCardHeader,
-  AuthDivider,
   AuthSwitchLink,
   FormAlert,
 } from "@/features/auth/components/shared/AuthFormChrome";
 import { EmailVerifyField } from "@/features/auth/components/shared/EmailVerifyField";
-import { KakaoAuthButton } from "@/features/auth/components/shared/KakaoAuthButton";
 import { TermsAgreement } from "@/features/auth/components/shared/TermsAgreement";
 import { useFieldFeedback } from "@/features/auth/hooks/useFieldFeedback";
 import { useRegister } from "@/features/auth/hooks/useRegister";
@@ -35,6 +33,7 @@ export function RegisterForm() {
   const registerMutation = useRegister();
   const [checkingNickname, setCheckingNickname] = useState(false);
   const [nicknameSuccess, setNicknameSuccess] = useState<string | null>(null);
+  const [nicknameCheckAttempted, setNicknameCheckAttempted] = useState(false);
 
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
@@ -65,9 +64,7 @@ export function RegisterForm() {
   } = form;
 
   const { errors, isSubmitted } = formState;
-  const { bindFocus, errorOf, validOf } = useFieldFeedback(formState, {
-    showWhileDirty: true,
-  });
+  const { bindFocus, errorOf, validOf } = useFieldFeedback(formState);
 
   const [
     email,
@@ -107,6 +104,7 @@ export function RegisterForm() {
   const handleNicknameChange: ChangeEventHandler<HTMLInputElement> = (event) => {
     nicknameField.onChange(event);
     setNicknameSuccess(null);
+    setNicknameCheckAttempted(false);
     setValue("nicknameChecked", false, {
       shouldDirty: true,
       shouldValidate: isSubmitted,
@@ -115,6 +113,7 @@ export function RegisterForm() {
   };
 
   const handleNicknameCheck = useCallback(async () => {
+    setNicknameCheckAttempted(true);
     setNicknameSuccess(null);
     clearErrors("nickname");
 
@@ -178,7 +177,7 @@ export function RegisterForm() {
   const emailFocus = bindFocus("email");
   const passwordFocus = bindFocus("password");
   const passwordConfirmFocus = bindFocus("passwordConfirm");
-  const nicknameError = errorOf("nickname");
+  const nicknameError = nicknameCheckAttempted ? errors.nickname?.message : errorOf("nickname");
   const nicknameCheckMessage = "닉네임 중복 확인을 완료해주세요.";
   const nicknameFormatValid = nicknameSchema.safeParse(nickname.trim()).success;
   const nicknameCheckRequired =
@@ -189,6 +188,8 @@ export function RegisterForm() {
     nicknameError && nicknameError !== nicknameCheckMessage
       ? nicknameError
       : undefined;
+  const passwordError = errorOf("password");
+  const passwordHint = "8~64자, 특수문자 포함";
 
   const handleInvalid: SubmitErrorHandler<RegisterFormValues> = (
     fieldErrors,
@@ -213,6 +214,7 @@ export function RegisterForm() {
   return (
     <form
       className="flex flex-col gap-4"
+      aria-busy={registerMutation.isPending}
       onSubmit={handleSubmit(
         (formValues) => {
           registerMutation.reset();
@@ -228,23 +230,36 @@ export function RegisterForm() {
     >
       <AuthCardHeader
         title="회원가입"
-        description="무료로 계정을 만들고 토론을 시작하세요"
+        description="반가워요. 함께 나눌 첫 생각을 준비해볼까요?"
       />
 
+      <fieldset disabled={registerMutation.isPending} className="flex min-w-0 flex-col gap-3">
+      <legend className="sr-only">회원가입 정보</legend>
       <Input
         label="닉네임"
+        floatingLabel
+        appearance="underline"
+        reserveFeedback
+        showClear={Boolean(nickname)}
+        onClear={() => {
+          setValue("nickname", "", { shouldDirty: true, shouldValidate: isSubmitted });
+          setValue("nicknameChecked", false, { shouldValidate: isSubmitted });
+          setNicknameSuccess(null);
+          setNicknameCheckAttempted(false);
+          clearErrors("nickname");
+          setFocus("nickname");
+        }}
         autoComplete="nickname"
         placeholder="2~12자, 특수문자 없이 입력"
         error={nicknameBlockingError}
-        isValid={Boolean(nicknameSuccess) || nicknameCheckRequired}
-        successMessage={
-          nicknameSuccess ?? (nicknameCheckRequired ? nicknameCheckMessage : undefined)
-        }
+        isValid={Boolean(nicknameSuccess)}
+        successMessage={nicknameSuccess ?? undefined}
+        helperText={nicknameCheckRequired ? "중복 확인을 눌러주세요." : "한글·영문·숫자 2~12자"}
         trailing={
           <Button
             type="button"
             variant="outline"
-            className="!h-12 !w-[96px] shrink-0 px-4 !text-[13px]"
+            className="mt-2 !h-12 !w-[96px] shrink-0 px-4 !text-[13px]"
             disabled={Boolean(nicknameSuccess) || checkingNickname}
             loading={checkingNickname}
             onClick={handleNicknameCheck}
@@ -263,6 +278,16 @@ export function RegisterForm() {
       />
 
       <EmailVerifyField
+        compactVerification
+        onVerificationComplete={() => setFocus("password")}
+        floatingLabel
+        appearance="underline"
+        reserveFeedback
+        onClear={() => {
+          setValue("email", "", { shouldDirty: true, shouldValidate: isSubmitted });
+          clearErrors("email");
+          setFocus("email");
+        }}
         email={email}
         emailError={errorOf("email")}
         verifyRequiredError={
@@ -285,9 +310,19 @@ export function RegisterForm() {
 
       <PasswordInput
         label="비밀번호"
+        floatingLabel
+        appearance="underline"
+        reserveFeedback
+        showClear={Boolean(password)}
+        onClear={() => {
+          setValue("password", "", { shouldDirty: true, shouldValidate: true });
+          setFocus("password");
+        }}
+        helperText={passwordHint}
+        successMessage="사용할 수 있는 비밀번호예요."
         autoComplete="new-password"
         placeholder="8~64자, 특수문자 포함"
-        error={errorOf("password")}
+        error={passwordError ? password ? passwordHint : "비밀번호를 입력해주세요." : undefined}
         isValid={validOf("password", password)}
         name={passwordField.name}
         onChange={passwordField.onChange}
@@ -301,6 +336,16 @@ export function RegisterForm() {
 
       <PasswordInput
         label="비밀번호 확인"
+        floatingLabel
+        appearance="underline"
+        reserveFeedback
+        helperText="비밀번호를 한 번 더 입력해주세요."
+        successMessage="비밀번호가 일치해요."
+        showClear={Boolean(passwordConfirm)}
+        onClear={() => {
+          setValue("passwordConfirm", "", { shouldDirty: true, shouldValidate: true });
+          setFocus("passwordConfirm");
+        }}
         autoComplete="new-password"
         placeholder="비밀번호를 한 번 더 입력하세요"
         error={errorOf("passwordConfirm")}
@@ -336,6 +381,7 @@ export function RegisterForm() {
           isSubmitted ? errors.agreeService?.message : undefined
         }
       />
+      </fieldset>
 
       {serverError ? <FormAlert>{serverError}</FormAlert> : null}
 
@@ -352,13 +398,6 @@ export function RegisterForm() {
       >
         회원가입
       </Button>
-
-      <AuthDivider />
-
-      <KakaoAuthButton
-        label="카카오계정으로 회원가입"
-        pendingMessage="카카오 회원가입은 준비 중입니다."
-      />
 
       <AuthSwitchLink
         prompt="이미 계정이 있으신가요?"
