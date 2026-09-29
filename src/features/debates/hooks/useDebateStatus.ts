@@ -24,10 +24,12 @@ export function useDebateStatus(debateId: string | null) {
       );
     },
     enabled: isReady && Boolean(debateId && accessToken),
-    refetchInterval: (query) => {
-      if (query.state.error instanceof ApiError && [401, 403, 404].includes(query.state.error.status)) return false;
-      return !query.state.data || query.state.data.debateStatus === "WAITING" ? 3000 : false;
-    },
+    // SSE 재연결과 snapshot으로 상태 복구가 가능해 주기 조회를 비활성화한다.
+    // 상태 조회 API가 유지되고 있어 polling fallback 설정은 주석으로 보존한다.
+    // refetchInterval: (query) => {
+    //   if (query.state.error instanceof ApiError && [401, 403, 404].includes(query.state.error.status)) return false;
+    //   return !query.state.data || query.state.data.debateStatus === "WAITING" ? 3000 : false;
+    // },
     retry: (failureCount, error) =>
       !(error instanceof ApiError && [401, 403, 404].includes(error.status)) &&
       failureCount < 1,
