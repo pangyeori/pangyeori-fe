@@ -35,16 +35,13 @@ type BackendApiResponse = {
   error?: BackendApiError | null;
 };
 
-function getBaseUrl() {
-  const base = process.env.NEXT_PUBLIC_API_BASE_URL;
-  if (base === undefined || base === "") {
-    return "";
-  }
-  return base.replace(/\/$/, "");
+export function apiUrl(path: string) {
+  return path;
 }
 
-export function apiUrl(path: string) {
-  return `${getBaseUrl()}${path}`;
+export function sseUrl(path: string) {
+  const base = process.env.NEXT_PUBLIC_SSE_BASE_URL ?? "";
+  return `${base.replace(/\/$/, "")}${path}`;
 }
 
 function isBackendEnvelope(body: unknown): body is BackendApiResponse {
