@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/features/auth/context/AuthProvider";
 import { issueDebateStreamTicket, type DebateStatus } from "@/features/debates/api/debates";
 import { applyStatusEvent } from "@/features/debates/statusEvents";
-import { ApiError, apiClient, apiUrl } from "@/lib/api/client";
+import { ApiError, apiClient, sseUrl } from "@/lib/api/client";
 
 export type { GuestStatus } from "@/features/debates/api/debates";
 
@@ -44,7 +44,7 @@ export function useDebateStatus(debateId: string | null) {
       try {
         const { ticket } = await issueDebateStreamTicket(debateId, accessToken);
         if (closed) return;
-        source = new EventSource(apiUrl(`/api/v1/debates/${encodeURIComponent(debateId)}/status/stream?ticket=${encodeURIComponent(ticket)}`));
+        source = new EventSource(sseUrl(`/api/v1/debates/${encodeURIComponent(debateId)}/status/stream?ticket=${encodeURIComponent(ticket)}`));
         for (const name of ["snapshot", "queue-changed", "guest-status-changed", "debate-status-changed"]) {
           source.addEventListener(name, (event) => {
             queryClient.setQueryData<DebateStatus>(["debates", debateId, "status", accessToken], (current) =>
