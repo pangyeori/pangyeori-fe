@@ -6,7 +6,7 @@ import {
   useQueryClient,
   type InfiniteData,
 } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { useAuth } from "@/features/auth/context/AuthProvider";
 import { RelativeDate } from "@/features/debates/components/RelativeDate";
@@ -47,6 +47,7 @@ export function NotificationBell() {
   const queryClient = useQueryClient();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const previousUnreadCount = useRef<number | null>(null);
@@ -152,6 +153,24 @@ export function NotificationBell() {
     };
   }, [open]);
 
+  useLayoutEffect(() => {
+    if (!open) return;
+
+    const positionPanel = () => {
+      const button = buttonRef.current;
+      const panel = panelRef.current;
+      if (!button || !panel) return;
+
+      const edgeGap = 20;
+      const maxLeft = window.innerWidth - panel.offsetWidth - edgeGap;
+      panel.style.left = `${Math.max(edgeGap, Math.min(button.getBoundingClientRect().left, maxLeft))}px`;
+    };
+
+    positionPanel();
+    window.addEventListener("resize", positionPanel);
+    return () => window.removeEventListener("resize", positionPanel);
+  }, [open]);
+
   useEffect(() => {
     const target = loadMoreRef.current;
     const root = scrollRef.current;
@@ -221,9 +240,10 @@ export function NotificationBell() {
 
       {open ? (
         <section
+          ref={panelRef}
           id="notification-panel"
           aria-label="알림 목록"
-          className="fixed inset-x-3 top-16 z-50 overflow-hidden rounded-2xl border border-[var(--line)] bg-white shadow-[0_20px_60px_rgba(15,23,42,0.2)] sm:left-auto sm:right-4 sm:w-96"
+          className="fixed top-16 z-50 w-[calc(100vw-1.5rem)] max-w-96 overflow-hidden rounded-2xl border border-[var(--line)] bg-white shadow-[0_20px_60px_rgba(15,23,42,0.2)]"
         >
           <div className="flex items-center justify-between border-b border-[var(--line)] px-4 py-3">
             <h2 className="font-bold text-[var(--ink)]">알림</h2>
