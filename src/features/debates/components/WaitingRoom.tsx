@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { RefreshButton } from "@/components/ui/RefreshButton";
 import { useAuth } from "@/features/auth/context/AuthProvider";
-import { getInvitation, acceptDebateGuest } from "@/features/debates/api/debates";
+import { acceptDebateGuest, getDebate } from "@/features/debates/api/debates";
 import { useDebateStatus } from "@/features/debates/hooks/useDebateStatus";
 import { DebateTimeBadges } from "@/features/debates/components/DebateTimeBadges";
 import { DebateRoomSkeleton } from "@/features/debates/components/DebateRoomSkeleton";
@@ -76,13 +76,13 @@ export function WaitingRoom({ debateId, inviteToken }: { debateId: string; invit
   const { accessToken, isReady } = useAuth();
   const profileQuery = useMyProfile();
   const [roomSnapshot, setRoomSnapshot] = useState<DebateRoomSnapshot | null>(null);
-  const resolvedInviteToken = inviteToken || roomSnapshot?.inviteToken || "";
-  const invitationQuery = useQuery({
-    queryKey: ["debate-invitations", resolvedInviteToken, accessToken],
-    queryFn: () => getInvitation(resolvedInviteToken, accessToken!),
-    enabled: isReady && Boolean(resolvedInviteToken && accessToken),
+  const debateQuery = useQuery({
+    queryKey: ["debates", debateId, "detail", accessToken],
+    queryFn: () => getDebate(debateId, accessToken!),
+    enabled: isReady && Boolean(debateId && accessToken),
   });
-  const room = invitationQuery.data ?? roomSnapshot;
+  const room = debateQuery.data ?? roomSnapshot;
+  const resolvedInviteToken = inviteToken || debateQuery.data?.inviteToken || roomSnapshot?.inviteToken || "";
   const hostIsPros = room?.guestPosition !== "PROS";
   const statusQuery = useDebateStatus(debateId);
   const inviteUrl = resolvedInviteToken
@@ -109,7 +109,7 @@ export function WaitingRoom({ debateId, inviteToken }: { debateId: string; invit
       .filter(({ userId }) => userId !== opponent?.id)
       .map(({ userId, nickname, requestedAt }) => ({ id: userId, name: nickname, requestedAt }));
   const { total, pageCount, currentPage, visible: visibleCandidates } = getCandidatePage(candidates, search, page);
-  const roomUpdatedAt = invitationQuery.dataUpdatedAt || statusQuery.dataUpdatedAt;
+  const roomUpdatedAt = debateQuery.dataUpdatedAt || statusQuery.dataUpdatedAt;
 
   const completedStep = confirmed ? 3 : opponent ? 2 : linkShared || candidates.length > 0 ? 1 : 0;
   const currentStep = Math.min(completedStep + 1, 3);
@@ -126,20 +126,20 @@ export function WaitingRoom({ debateId, inviteToken }: { debateId: string; invit
   }, [debateId]);
 
   useEffect(() => {
-    const invitation = invitationQuery.data;
-    if (!invitation || !resolvedInviteToken) return;
+    const debate = debateQuery.data;
+    if (!debate) return;
     rememberDebateRoom({
       debateId,
-      title: invitation.title,
-      description: invitation.description,
-      hostPosition: invitation.guestPosition === "PROS" ? "CONS" : "PROS",
-      guestPosition: invitation.guestPosition,
-      turnTimeSeconds: invitation.turnTimeSeconds,
-      freeDebateTimeSeconds: invitation.freeDebateTimeSeconds,
-      createdAt: invitation.createdAt,
-      inviteToken: resolvedInviteToken,
+      title: debate.title,
+      description: debate.description,
+      hostPosition: debate.hostPosition,
+      guestPosition: debate.guestPosition,
+      turnTimeSeconds: debate.turnTimeSeconds,
+      freeDebateTimeSeconds: debate.freeDebateTimeSeconds,
+      createdAt: roomSnapshot?.createdAt,
+      inviteToken: debate.inviteToken,
     });
-  }, [debateId, invitationQuery.data, resolvedInviteToken]);
+  }, [debateId, debateQuery.data, roomSnapshot?.createdAt]);
 
   useEffect(() => {
     if (!toastVisible) return;
@@ -204,7 +204,7 @@ export function WaitingRoom({ debateId, inviteToken }: { debateId: string; invit
 
   if (!isReady) return <DebateRoomSkeleton />;
   if (!accessToken) return <p className="p-8 text-center">토론방을 보려면 <Link className="underline" href={`/signin?next=${encodeURIComponent(`/debates/${debateId}/waiting`)}`}>로그인</Link>해주세요.</p>;
-  if (resolvedInviteToken && !room && invitationQuery.isPending) return <DebateRoomSkeleton />;
+  if (!room && debateQuery.isPending) return <DebateRoomSkeleton />;
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-[var(--page-bg)]">
@@ -220,9 +220,9 @@ export function WaitingRoom({ debateId, inviteToken }: { debateId: string; invit
           </p>
         </div>
 
-        {actionError || statusQuery.isError || invitationQuery.isError ? (
+        {actionError || statusQuery.isError || debateQuery.isError ? (
           <p className="mt-4 text-center text-sm text-[var(--danger)]" role="alert">
-            {actionError || (invitationQuery.error instanceof Error ? invitationQuery.error.message : "") || (statusQuery.error instanceof Error ? statusQuery.error.message : "참여 상태를 불러오지 못했습니다.")}
+            {actionError || (debateQuery.error instanceof Error ? debateQuery.error.message : "") || (statusQuery.error instanceof Error ? statusQuery.error.message : "참여 상태를 불러오지 못했습니다.")}
           </p>
         ) : null}
 
@@ -302,9 +302,9 @@ export function WaitingRoom({ debateId, inviteToken }: { debateId: string; invit
                                         ? "참여자 선택 중"
                                         : "링크 공유 대기"}
                           </span>
-                      {room?.createdAt && roomUpdatedAt ? (
+                      {roomSnapshot?.createdAt && roomUpdatedAt ? (
                         <RelativeDate
-                          value={room.createdAt}
+                          value={roomSnapshot.createdAt}
                           now={roomUpdatedAt}
                           className="text-sm font-semibold text-[var(--ink-muted)]"
                         />

@@ -48,6 +48,18 @@ export type CreatedDebate = {
   inviteToken: string;
 };
 
+export type DebateDetail = {
+  id: string;
+  title: string;
+  description: string | null;
+  hostPosition: Position;
+  guestPosition: Position;
+  status: DebateLifecycleStatus;
+  turnTimeSeconds: number;
+  freeDebateTimeSeconds: number;
+  inviteToken: string | null;
+};
+
 export type MyDebate = {
   debateId: string;
   title: string;
@@ -80,6 +92,10 @@ export function createDebate(token: string, body: {
   freeDebateTimeSeconds: number;
 }) {
   return apiClient<CreatedDebate>("/api/v1/debates", { method: "POST", token, body });
+}
+
+export function getDebate(debateId: string, token: string) {
+  return apiClient<DebateDetail>(`/api/v1/debates/${encodeURIComponent(debateId)}`, { token });
 }
 
 export function getMyDebates(
