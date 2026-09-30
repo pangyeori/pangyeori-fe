@@ -8,8 +8,8 @@ export type DebateRoomSnapshot = {
   guestPosition: Position;
   turnTimeSeconds: number;
   freeDebateTimeSeconds: number;
-  createdAt: string;
-  inviteToken?: string;
+  createdAt?: string;
+  inviteToken?: string | null;
 };
 
 const key = (debateId: string) => `pangyeori:debate-room:${debateId}`;
@@ -24,7 +24,12 @@ export function rememberDebateRoom(room: DebateRoomSnapshot) {
     const previous = readDebateRoom(room.debateId);
     sessionStorage.setItem(
       key(room.debateId),
-      JSON.stringify({ ...previous, ...room, inviteToken: room.inviteToken ?? previous?.inviteToken }),
+      JSON.stringify({
+        ...previous,
+        ...room,
+        createdAt: room.createdAt ?? previous?.createdAt,
+        inviteToken: room.inviteToken === undefined ? previous?.inviteToken : room.inviteToken,
+      }),
     );
   } catch {
     // 세션 캐시는 선택 사항이며 저장 실패가 토론방 이동을 막으면 안 된다.
