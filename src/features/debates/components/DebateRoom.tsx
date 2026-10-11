@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { Button } from "@/components/ui/Button";
@@ -28,8 +28,10 @@ import {
   speakingPosition,
 } from "@/features/debates/debateProgress";
 import { useDebatePresence } from "@/features/debates/hooks/useDebatePresence";
-import { resolvePresenceStatus, type PresenceStatus } from "@/features/debates/presenceEvents";
+import { mergeDebateHistoryEvent, resolvePresenceStatus, type PresenceStatus } from "@/features/debates/presenceEvents";
 import { getProfileImageViewUrl } from "@/features/mypage/api/getMyProfile";
+import { ProfileAvatar } from "@/features/mypage/components/ProfileAvatar";
+import { useMyProfile } from "@/features/mypage/hooks/useMyProfile";
 
 const presenceLabels: Record<PresenceStatus, string> = {
   unknown: "입장 확인 중",
@@ -37,6 +39,26 @@ const presenceLabels: Record<PresenceStatus, string> = {
   reconnecting: "재연결 중",
   left: "퇴장",
 };
+
+const messageTimeFormatter = new Intl.DateTimeFormat("ko-KR", {
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: true,
+});
+
+const messageDateTimeFormatter = new Intl.DateTimeFormat("ko-KR", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: true,
+});
+
+function formatMessageDateTime(date: Date) {
+  const parts = new Map(messageDateTimeFormatter.formatToParts(date).map(({ type, value }) => [type, value]));
+  return `${parts.get("year")}년 ${parts.get("month")}월 ${parts.get("day")}일 ${parts.get("dayPeriod")} ${parts.get("hour")}:${parts.get("minute")}`;
+}
 
 function positionLabel(position: Position) {
   return position === "PROS" ? "찬성" : "반대";
@@ -73,48 +95,39 @@ function HostMark() {
   );
 }
 
-function MessageAvatar({ nickname, profileImageUrl }: {
-  nickname: string;
-  profileImageUrl: string | null;
-}) {
-  const [hasImageError, setHasImageError] = useState(false);
-
-  return (
-    <span className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-200 text-xs font-bold text-slate-600 ring-1 ring-[var(--line)]">
-      {nickname.trim().charAt(0) || "?"}
-      {profileImageUrl && !hasImageError ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img className="absolute inset-0 h-full w-full object-cover" src={profileImageUrl} alt={`${nickname}님의 프로필`} onError={() => setHasImageError(true)} />
-      ) : null}
-    </span>
-  );
-}
-
-function ParticipantCard({ role, position, status, name }: {
+function ParticipantCard({ role, position, status, name, profileImageUrl }: {
   role: DebateRole;
   position: Position;
   status: PresenceStatus;
   name: string;
+  profileImageUrl: string | null;
 }) {
   const isHost = role === "HOST";
   const entered = status === "entered";
 
   return (
     <li className="rounded-xl border border-[var(--line)] bg-[var(--surface-muted)] p-3 sm:p-4">
-      <div className="flex items-center gap-2 sm:gap-3">
-        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white sm:h-11 sm:w-11 sm:text-base ${isHost ? "bg-[var(--brand-blue)]" : "bg-rose-500"}`}>
-          {isHost ? "H" : "G"}
-        </span>
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        <ProfileAvatar
+          key={profileImageUrl ?? "fallback"}
+          nickname={name}
+          profileImageUrl={profileImageUrl}
+          className="h-9 w-9 sm:h-11 sm:w-11"
+        />
         <div className="min-w-0 flex-1">
-          <p className="truncate font-bold text-[var(--ink)]">{name}</p>
-          <div className="mt-1 flex items-center gap-1.5">
-            <PositionBadge position={position} />
+          <div className="flex min-w-0 items-center gap-1.5">
+            <p className="truncate font-bold text-[var(--ink)]">{name}</p>
             {isHost ? <HostMark /> : null}
           </div>
+          <div className="mt-1 flex items-center gap-1.5">
+            <PositionBadge position={position} />
+          </div>
         </div>
-        <span className={`h-2.5 w-2.5 rounded-full ${entered ? "bg-[var(--success)]" : status === "reconnecting" ? "bg-blue-400" : status === "left" ? "bg-slate-400" : "bg-amber-400"}`} aria-hidden />
+        <div className="flex w-full shrink-0 items-center gap-1 text-[10px] font-semibold text-[var(--ink-muted)] sm:gap-1.5 sm:text-xs">
+          <span className={`h-2.5 w-2.5 rounded-full ${entered ? "bg-[var(--success)]" : status === "reconnecting" ? "bg-blue-400" : status === "left" ? "bg-slate-400" : "bg-amber-400"}`} aria-hidden />
+          <span className="whitespace-nowrap">{presenceLabels[status]}</span>
+        </div>
       </div>
-      <p className="mt-2 text-xs font-semibold text-[var(--ink-muted)] sm:mt-3">{presenceLabels[status]}</p>
     </li>
   );
 }
@@ -129,21 +142,32 @@ function HistoryItem({ history, hostPosition, myPosition, opponentName, opponent
   const position = speakingPosition(history.stage);
   const role = position ? roleForPosition(position, hostPosition) : null;
   const mine = Boolean(position && position === myPosition);
+  const submittedAt = new Date(parseServerTime(history.createdAt));
+  const messageTime = messageTimeFormatter.format(submittedAt);
+  const messageDateTime = formatMessageDateTime(submittedAt);
 
   return (
-    <li className={`flex items-end gap-2 ${mine ? "justify-end" : "justify-start"}`}>
-      {!mine ? <MessageAvatar key={opponentProfileImageUrl ?? "fallback"} nickname={opponentName} profileImageUrl={opponentProfileImageUrl} /> : null}
+    <li className={`flex items-start gap-2 ${mine ? "justify-end" : "justify-start"}`}>
+      {!mine ? <ProfileAvatar key={opponentProfileImageUrl ?? "fallback"} nickname={opponentName} profileImageUrl={opponentProfileImageUrl} className="mt-6 h-12 w-12" /> : null}
       <div className={`flex max-w-[82%] flex-col sm:max-w-[78%] ${mine ? "items-end" : "items-start"}`}>
         <div className={`mb-1 flex items-center gap-1.5 ${mine ? "justify-end" : "justify-start"}`}>
           {!mine ? <span className="max-w-28 truncate text-xs font-semibold text-[var(--ink-muted)]">{opponentName}</span> : null}
           {role === "HOST" ? <HostMark /> : null}
           {position ? <PositionBadge position={position} /> : null}
         </div>
-        <article className={`rounded-2xl px-4 py-3 ${mine ? "rounded-br-md bg-[var(--brand-blue)] text-white" : "rounded-bl-md bg-[var(--surface-muted)] text-[var(--ink)]"}`}>
+        <article className={`flex min-h-12 items-center rounded-2xl px-4 py-3 ${mine ? "rounded-br-md bg-[var(--brand-blue)] text-white" : "rounded-bl-md bg-slate-100 text-[var(--ink)]"}`}>
           <p className={`whitespace-pre-wrap break-words text-sm leading-6 ${history.content === null ? "italic opacity-75" : ""}`}>
             {history.content ?? "제한 시간 내에 발언하지 않았습니다."}
           </p>
         </article>
+        <time
+          className="mt-1 self-start text-[10px] text-[var(--ink-faint)] sm:text-xs"
+          dateTime={history.createdAt}
+          title={messageDateTime}
+          aria-label={messageDateTime}
+        >
+          {messageTime}
+        </time>
       </div>
     </li>
   );
@@ -151,8 +175,10 @@ function HistoryItem({ history, hostPosition, myPosition, opponentName, opponent
 
 export function DebateRoom({ debateId }: { debateId: string }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { accessToken, isReady } = useAuth();
   const [content, setContent] = useState("");
+  const [scheduledContent, setScheduledContent] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const [showFloatingProgress, setShowFloatingProgress] = useState(false);
@@ -177,6 +203,7 @@ export function DebateRoom({ debateId }: { debateId: string }) {
     enabled: Boolean(accessToken && entryAllowed),
     staleTime: 60_000,
   });
+  const profileQuery = useMyProfile();
   const opponentImageKey = memberQuery.data?.opponent?.profileImageKey;
   const opponentImageQuery = useQuery({
     queryKey: ["storage", "profile-image", opponentImageKey, accessToken],
@@ -186,6 +213,9 @@ export function DebateRoom({ debateId }: { debateId: string }) {
   const presence = useDebatePresence(debateId, entryAllowed);
   const syncedConnection = useRef(0);
   const recoveredDeadline = useRef<string | null>(null);
+  const scheduledSubmissionInFlight = useRef(false);
+  const messageViewport = useRef<HTMLDivElement>(null);
+  const shouldStickToLatestMessage = useRef(true);
   const statementInput = useRef<HTMLTextAreaElement>(null);
   const { refetch: refetchDebate } = debateQuery;
   const { refetch: refetchHistories } = historiesQuery;
@@ -195,11 +225,16 @@ export function DebateRoom({ debateId }: { debateId: string }) {
     mutationFn: (statement: string) => submitDebateHistory(debateId, statement, accessToken!),
     onSuccess: () => {
       setContent("");
+      setScheduledContent("");
+      scheduledSubmissionInFlight.current = false;
       setSubmitError("");
       if (statementInput.current) resetStatementInput(statementInput.current);
       void Promise.all([refetchDebate(), refetchHistories()]);
     },
-    onError: (error) => {
+    onError: (error, statement) => {
+      setContent(statement);
+      setScheduledContent("");
+      scheduledSubmissionInFlight.current = false;
       setSubmitError(error instanceof Error ? error.message : "발언을 제출하지 못했습니다.");
       void Promise.all([refetchDebate(), refetchHistories()]);
     },
@@ -218,9 +253,14 @@ export function DebateRoom({ debateId }: { debateId: string }) {
   }, [presence.connectedAt, refetchDebate, refetchHistories, refetchMember]);
 
   useEffect(() => {
-    if (!presence.latestProgressEvent) return;
+    const event = presence.latestProgressEvent;
+    if (!event) return;
+    queryClient.setQueryData<DebateHistory[]>(
+      ["debates", debateId, "histories", accessToken],
+      (histories) => mergeDebateHistoryEvent(histories, event),
+    );
     void Promise.all([refetchDebate(), refetchHistories()]);
-  }, [presence.latestProgressEvent, refetchDebate, refetchHistories]);
+  }, [accessToken, debateId, presence.latestProgressEvent, queryClient, refetchDebate, refetchHistories]);
 
   useEffect(() => {
     if (!debateQuery.data?.turnEndsAt) return;
@@ -246,6 +286,31 @@ export function DebateRoom({ debateId }: { debateId: string }) {
     return () => window.removeEventListener("scroll", updateFloatingProgress);
   }, [entryAllowed]);
 
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      if (messageViewport.current && shouldStickToLatestMessage.current) {
+        messageViewport.current.scrollTop = messageViewport.current.scrollHeight;
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [historiesQuery.data?.length, scheduledContent]);
+
+  const shouldFocusStatement = debateQuery.data?.status === "IN_PROGRESS"
+    && speakingPosition(debateQuery.data?.currentStage ?? "NONE") === memberQuery.data?.myPosition;
+
+  useEffect(() => {
+    if (shouldFocusStatement) statementInput.current?.focus();
+  }, [shouldFocusStatement]);
+
+  useEffect(() => {
+    const statement = scheduledContent.trim();
+    if (!shouldFocusStatement || !statement
+      || submitMutation.isPending || scheduledSubmissionInFlight.current) return;
+
+    scheduledSubmissionInFlight.current = true;
+    submitMutation.mutate(statement);
+  }, [scheduledContent, shouldFocusStatement, submitMutation]);
+
   if (!isReady || (accessToken && debateQuery.isPending)) return <DebateRoomSkeleton />;
   if (!accessToken) return null;
 
@@ -268,10 +333,18 @@ export function DebateRoom({ debateId }: { debateId: string }) {
   const currentSpeaker = speakingPosition(debate.currentStage);
   const started = presence.started || debate.status === "IN_PROGRESS";
   const isMyTurn = started && Boolean(currentSpeaker && currentSpeaker === myPosition);
+  const canCompose = started && Boolean(member && currentSpeaker) && !scheduledContent;
+  const isPrewriting = canCompose && !isMyTurn;
   const remainingSeconds = remainingTurnSeconds(debate.turnEndsAt, now);
-  const hostName = member?.myRole === "HOST" ? "나" : member?.opponent?.nickname ?? "개설자";
-  const guestName = member?.myRole === "GUEST" ? "나" : member?.opponent?.nickname ?? "게스트";
+  const myNickname = profileQuery.data?.nickname ?? "내 정보 확인 중";
+  const hostName = member?.myRole === "HOST" ? `${myNickname}(나)` : member?.opponent?.nickname ?? "개설자";
+  const guestName = member?.myRole === "GUEST" ? `${myNickname}(나)` : member?.opponent?.nickname ?? "게스트";
   const opponentName = member?.opponent?.nickname ?? "상대방";
+  const myProfileImageUrl = profileQuery.data?.profileImageUrl ?? null;
+  const opponentProfileImageUrl = opponentImageQuery.data?.url ?? null;
+  const histories = historiesQuery.data;
+  const hostProfileImageUrl = member?.myRole === "HOST" ? myProfileImageUrl : opponentProfileImageUrl;
+  const guestProfileImageUrl = member?.myRole === "GUEST" ? myProfileImageUrl : opponentProfileImageUrl;
   const turnStatusLabel = !member
     ? "차례 확인 중"
     : isMyTurn
@@ -285,15 +358,24 @@ export function DebateRoom({ debateId }: { debateId: string }) {
       ? "내 진영 정보를 확인하고 있습니다."
       : currentSpeaker === null
         ? "다음 토론 단계를 기다리고 있습니다."
+        : scheduledContent
+          ? "예약한 발언을 취소하면 다시 입력할 수 있습니다."
         : isMyTurn
           ? `${positionLabel(currentSpeaker)} 측 입론을 입력하세요.`
-          : "상대방의 발언을 기다리고 있습니다.";
+          : "내 차례에 보낼 발언을 미리 입력하세요.";
 
   const submitStatement = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const statement = content.trim();
-    if (!statement || !isMyTurn || submitMutation.isPending) return;
+    if (!statement || submitMutation.isPending) return;
     setSubmitError("");
+    shouldStickToLatestMessage.current = true;
+    if (!isMyTurn) {
+      setScheduledContent(statement);
+      setContent("");
+      if (statementInput.current) resetStatementInput(statementInput.current);
+      return;
+    }
     submitMutation.mutate(statement);
   };
 
@@ -325,13 +407,10 @@ export function DebateRoom({ debateId }: { debateId: string }) {
             <h1 className="mt-3 text-2xl font-bold tracking-tight text-[var(--ink)] sm:text-3xl">{debate.title}</h1>
             {debate.description ? <p className="mt-2 text-sm text-[var(--ink-muted)]">{debate.description}</p> : null}
           </div>
-          <div className="flex shrink-0 items-center gap-3">
+          <div className="hidden shrink-0 items-center gap-3 sm:flex">
             <div className="hidden sm:block">
               <DebateTimeBadges turnTimeSeconds={debate.turnTimeSeconds} freeDebateTimeSeconds={debate.freeDebateTimeSeconds} />
             </div>
-            <Button variant="outline" className="!h-10 !w-auto px-4" onClick={() => router.push("/mypage")}>
-              나가기
-            </Button>
           </div>
         </div>
 
@@ -364,6 +443,11 @@ export function DebateRoom({ debateId }: { debateId: string }) {
             </p>
           )}
 
+          <div className="mt-4 border-t border-[var(--line)] pt-4">
+            <Button variant="outline" className="!h-10" onClick={() => router.push("/mypage")}>
+              나가기
+            </Button>
+          </div>
         </section>
         {memberQuery.isError || (memberQuery.isSuccess && !member) ? (
           <div className="mt-3 flex items-center justify-between gap-4 rounded-xl border border-[var(--danger-soft)] bg-[var(--danger-bg)] px-4 py-3" role="alert">
@@ -378,8 +462,8 @@ export function DebateRoom({ debateId }: { debateId: string }) {
           <aside className="rounded-2xl border border-[var(--line)] bg-white p-4 shadow-[0_12px_40px_rgba(16,24,40,0.05)] sm:p-5">
             <h2 className="font-bold text-[var(--ink)]">참여자</h2>
             <ul className="mt-3 grid grid-cols-2 gap-2 lg:block lg:space-y-3">
-              <ParticipantCard role="HOST" position={debate.hostPosition} status={resolvePresenceStatus(presence.roles.HOST, started)} name={hostName} />
-              <ParticipantCard role="GUEST" position={debate.guestPosition} status={resolvePresenceStatus(presence.roles.GUEST, started)} name={guestName} />
+              <ParticipantCard role="HOST" position={debate.hostPosition} status={resolvePresenceStatus(presence.roles.HOST, started)} name={hostName} profileImageUrl={hostProfileImageUrl} />
+              <ParticipantCard role="GUEST" position={debate.guestPosition} status={resolvePresenceStatus(presence.roles.GUEST, started)} name={guestName} profileImageUrl={guestProfileImageUrl} />
             </ul>
           </aside>
 
@@ -394,7 +478,14 @@ export function DebateRoom({ debateId }: { debateId: string }) {
               </span>
             </div>
 
-            <div className="min-h-56 p-4 sm:min-h-72 sm:p-5">
+            <div
+              ref={messageViewport}
+              className="min-h-56 max-h-[60vh] overflow-y-auto overscroll-contain p-4 sm:min-h-72 sm:p-5 lg:max-h-[640px]"
+              onScroll={(event) => {
+                const element = event.currentTarget;
+                shouldStickToLatestMessage.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
+              }}
+            >
               {historiesQuery.isPending ? (
                 <div className="space-y-5 motion-safe:animate-pulse" aria-label="발언 내역 불러오는 중">
                   <div className="h-20 w-4/5 rounded-2xl bg-slate-100" />
@@ -407,18 +498,42 @@ export function DebateRoom({ debateId }: { debateId: string }) {
                     다시 시도
                   </button>
                 </div>
-              ) : historiesQuery.data?.length ? (
+              ) : histories?.length || scheduledContent ? (
                 <ol className="space-y-5">
-                  {historiesQuery.data.map((history) => (
+                  {histories?.map((history) => (
                     <HistoryItem
                       key={history.id}
                       history={history}
                       hostPosition={debate.hostPosition}
                       myPosition={myPosition}
                       opponentName={opponentName}
-                      opponentProfileImageUrl={opponentImageQuery.data?.url ?? null}
+                      opponentProfileImageUrl={opponentProfileImageUrl}
                     />
                   ))}
+                  {scheduledContent ? (
+                    <li className="flex justify-end">
+                      <div className="flex max-w-[82%] flex-col items-end sm:max-w-[78%]">
+                        <article className="flex min-h-12 items-center rounded-2xl rounded-br-md bg-slate-200 px-4 py-3 text-[var(--ink)]">
+                          <p className="whitespace-pre-wrap break-words text-sm leading-6">{scheduledContent}</p>
+                        </article>
+                        <div className="mt-1 flex items-center gap-1 text-xs font-semibold text-[var(--ink-muted)]">
+                          <span>예약됨</span>
+                          <span aria-hidden>·</span>
+                          <button
+                            className="hover:underline disabled:cursor-not-allowed disabled:opacity-40"
+                            type="button"
+                            disabled={submitMutation.isPending}
+                            onClick={() => {
+                              setScheduledContent("");
+                              scheduledSubmissionInFlight.current = false;
+                            }}
+                          >
+                            취소하기
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  ) : null}
                 </ol>
               ) : (
                 <p className="py-12 text-center text-sm text-[var(--ink-muted)]">
@@ -433,10 +548,10 @@ export function DebateRoom({ debateId }: { debateId: string }) {
                 ref={statementInput}
                 id="debate-statement"
                 rows={1}
-                className="h-11 max-h-36 min-h-11 w-full resize-none overflow-y-hidden rounded-xl border border-[var(--line)] bg-[var(--surface-muted)] px-4 py-2.5 text-sm leading-6 outline-none transition focus:border-[var(--brand-blue)] focus:ring-2 focus:ring-[var(--brand-blue-soft)] disabled:cursor-not-allowed disabled:opacity-70"
+                className={`h-11 max-h-36 min-h-11 w-full resize-none overflow-y-hidden rounded-xl border border-[var(--line)] px-4 py-2.5 text-sm leading-6 outline-none transition focus:border-[var(--brand-blue)] focus:ring-2 focus:ring-[var(--brand-blue-soft)] disabled:cursor-not-allowed disabled:opacity-70 ${isPrewriting ? "bg-slate-100" : isMyTurn ? "bg-white" : "bg-[var(--surface-muted)]"}`}
                 value={content}
                 maxLength={1000}
-                disabled={!isMyTurn || submitMutation.isPending}
+                disabled={!canCompose || submitMutation.isPending}
                 placeholder={inputPlaceholder}
                 onChange={(event) => {
                   setContent(event.target.value);
@@ -448,7 +563,7 @@ export function DebateRoom({ debateId }: { debateId: string }) {
                   <span className="text-xs text-[var(--ink-faint)]">{content.length}/1000</span>
                   {submitError ? <p className="mt-1 text-xs font-semibold text-[var(--danger)]" role="alert">{submitError}</p> : null}
                 </div>
-                <Button className="!h-10 sm:!w-auto sm:px-5" type="submit" loading={submitMutation.isPending} disabled={!isMyTurn || !content.trim()}>
+                <Button className="!h-10 sm:!w-auto sm:px-5" type="submit" loading={submitMutation.isPending} disabled={!canCompose || !content.trim()}>
                   발언 제출
                 </Button>
               </div>
@@ -470,6 +585,9 @@ export function DebateRoom({ debateId }: { debateId: string }) {
                 </div>
               ) : null}
             </section>
+            <Button variant="outline" className="!h-10" onClick={() => router.push("/mypage")}>
+              나가기
+            </Button>
           </aside>
         </div>
       </main>

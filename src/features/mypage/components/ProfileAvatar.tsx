@@ -5,6 +5,7 @@ import { useState } from "react";
 type ProfileAvatarProps = {
   nickname: string;
   profileImageUrl: string | null;
+  className?: string;
 };
 
 function DefaultProfileIcon() {
@@ -26,12 +27,13 @@ function DefaultProfileIcon() {
 export function ProfileAvatar({
   nickname,
   profileImageUrl,
+  className = "size-28 sm:size-32",
 }: ProfileAvatarProps) {
   const [hasImageError, setHasImageError] = useState(false);
   const shouldShowImage = Boolean(profileImageUrl) && !hasImageError;
 
   return (
-    <div className="flex size-28 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--surface-muted)] ring-1 ring-[var(--line)] sm:size-32">
+    <div className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--surface-muted)] ring-1 ring-[var(--line)] ${className}`}>
       {shouldShowImage ? (
         // 외부 이미지 호스트가 정해지지 않아 브라우저 기본 이미지 로딩을 사용한다.
         // eslint-disable-next-line @next/next/no-img-element

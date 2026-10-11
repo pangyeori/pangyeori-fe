@@ -1,4 +1,4 @@
-import type { DebateRole, DebateStage } from "@/features/debates/api/debates";
+import type { DebateHistory, DebateRole, DebateStage } from "@/features/debates/api/debates";
 
 const debateStages: DebateStage[] = [
   "NONE",
@@ -27,6 +27,7 @@ export type DebateConnectionEvent = {
   stage?: DebateStage | null;
   content?: string | null;
   turnEndsAt?: string | null;
+  submittedAt?: string | null;
 };
 
 export type PresenceStatus = "unknown" | "entered" | "reconnecting" | "left";
@@ -64,6 +65,8 @@ export function parseDebateConnectionEvent(raw: string, debateId: string): Debat
     if (["STAGE_CHANGED", "STATEMENT_SUBMITTED", "STATEMENT_TIMED_OUT"].includes(type)
       && !debateStages.includes(value.stage as DebateStage)) return null;
     if (type === "STATEMENT_SUBMITTED" && typeof value.content !== "string") return null;
+    if (["STATEMENT_SUBMITTED", "STATEMENT_TIMED_OUT"].includes(type)
+      && (typeof value.submittedAt !== "string" || !Number.isFinite(Date.parse(value.submittedAt)))) return null;
     if (type === "STAGE_CHANGED" && value.turnEndsAt !== null && typeof value.turnEndsAt !== "string") return null;
     return value as DebateConnectionEvent;
   } catch {
@@ -97,6 +100,24 @@ export function isDebateProgressEvent(event: DebateConnectionEvent) {
   return event.type === "STAGE_CHANGED"
     || event.type === "STATEMENT_SUBMITTED"
     || event.type === "STATEMENT_TIMED_OUT";
+}
+
+export function mergeDebateHistoryEvent(
+  histories: DebateHistory[] | undefined,
+  event: DebateConnectionEvent,
+) {
+  if (!event.stage || !event.submittedAt
+    || (event.type !== "STATEMENT_SUBMITTED" && event.type !== "STATEMENT_TIMED_OUT")) return histories;
+
+  const existing = histories?.find(({ stage }) => stage === event.stage);
+  const history: DebateHistory = {
+    id: existing?.id ?? `realtime-${event.stage}`,
+    stage: event.stage,
+    content: event.type === "STATEMENT_SUBMITTED" ? event.content ?? null : null,
+    createdAt: event.submittedAt,
+  };
+  if (!histories || !existing) return [...(histories ?? []), history];
+  return histories.map((current) => current.stage === event.stage ? history : current);
 }
 
 export function confirmDebateDeparture(current: DebatePresence, role: DebateRole): DebatePresence {

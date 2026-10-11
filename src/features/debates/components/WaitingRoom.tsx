@@ -21,13 +21,34 @@ import {
   type DebateRoomSnapshot,
 } from "@/features/debates/roomSession";
 import { useMyProfile } from "@/features/mypage/hooks/useMyProfile";
+import { ProfileAvatar } from "@/features/mypage/components/ProfileAvatar";
+import { getProfileImageViewUrl } from "@/features/mypage/api/getMyProfile";
 import { getCandidatePage } from "@/features/debates/candidateList";
 
 type Candidate = {
   id: string;
   name: string;
+  profileImageKey: string | null;
   requestedAt?: string | null;
 };
+
+function CandidateAvatar({ candidate, token }: { candidate: Candidate; token: string }) {
+  const imageQuery = useQuery({
+    queryKey: ["storage", "profile-image", candidate.profileImageKey, token],
+    queryFn: () => getProfileImageViewUrl(candidate.profileImageKey!, token),
+    enabled: Boolean(candidate.profileImageKey),
+    retry: false,
+  });
+
+  return (
+    <ProfileAvatar
+      key={imageQuery.data?.url ?? "default-profile"}
+      nickname={candidate.name}
+      profileImageUrl={imageQuery.data?.url ?? null}
+      className="h-11 w-11"
+    />
+  );
+}
 
 const steps = [
   [1, "링크 공유", "초대 링크를 전달합니다."],
@@ -107,7 +128,7 @@ export function WaitingRoom({ debateId, inviteToken }: { debateId: string; invit
     ? selectedOpponent : null;
   const candidates = (statusQuery.data?.requestList ?? [])
       .filter(({ userId }) => userId !== opponent?.id)
-      .map(({ userId, nickname, requestedAt }) => ({ id: userId, name: nickname, requestedAt }));
+      .map(({ userId, nickname, profileImageKey, requestedAt }) => ({ id: userId, name: nickname, profileImageKey, requestedAt }));
   const { total, pageCount, currentPage, visible: visibleCandidates } = getCandidatePage(candidates, search, page);
   const roomUpdatedAt = debateQuery.dataUpdatedAt || statusQuery.dataUpdatedAt;
 
@@ -328,12 +349,12 @@ export function WaitingRoom({ debateId, inviteToken }: { debateId: string; invit
                 <div className="mt-4 grid items-stretch gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
                   <div className={`rounded-2xl border p-5 ${hostIsPros ? "border-blue-200 bg-blue-50" : "border-rose-200 bg-rose-50"}`}>
                     <p className={`text-sm font-bold ${hostIsPros ? "text-blue-600" : "text-rose-600"}`}>
-                      {room?.guestPosition === "PROS" ? "반대" : "찬성"} 진영 <span className="text-[var(--ink)]">(나)</span>
+                      {room?.guestPosition === "PROS" ? "반대" : "찬성"} 진영
                     </p>
                     <div className="mt-5 flex items-center gap-3">
-                      <span className={`flex h-11 w-11 items-center justify-center rounded-full font-bold text-white ${hostIsPros ? "bg-[var(--brand-blue)]" : "bg-rose-500"}`}>나</span>
+                      <ProfileAvatar nickname={profileQuery.data?.nickname ?? "내 정보"} profileImageUrl={profileQuery.data?.profileImageUrl ?? null} className="h-11 w-11" />
                       <div>
-                        <p className="font-bold text-[var(--ink)]">{profileQuery.data?.nickname ?? "내 정보 확인 중"}</p>
+                        <p className="font-bold text-[var(--ink)]">{profileQuery.data?.nickname ?? "내 정보 확인 중"}<span className="text-xs text-[var(--ink-muted)]">(나)</span></p>
                         <p className="mt-1 text-xs text-[var(--ink-muted)]">방장</p>
                       </div>
                     </div>
@@ -355,9 +376,7 @@ export function WaitingRoom({ debateId, inviteToken }: { debateId: string; invit
                         </button>
                       </div>
                       <div className="mt-5 flex items-center gap-3">
-                        <span className={`flex h-11 w-11 items-center justify-center rounded-full font-bold text-white ${hostIsPros ? "bg-rose-500" : "bg-[var(--brand-blue)]"}`}>
-                          {opponent.name[0]}
-                        </span>
+                        <CandidateAvatar candidate={opponent} token={accessToken} />
                         <div>
                           <p className="font-bold text-[var(--ink)]">{opponent.name}</p>
                         </div>
@@ -438,9 +457,7 @@ export function WaitingRoom({ debateId, inviteToken }: { debateId: string; invit
                     return (
                       <li key={candidate.id} className="flex items-center justify-between gap-4 py-5">
                         <div className="flex min-w-0 flex-1 items-center gap-3">
-                          <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full font-bold ${hostIsPros ? "bg-rose-100 text-rose-600" : "bg-blue-100 text-blue-600"}`}>
-                            {candidate.name[0]}
-                          </span>
+                          <CandidateAvatar candidate={candidate} token={accessToken} />
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
                               <p className="font-bold text-[var(--ink)]">{candidate.name}</p>

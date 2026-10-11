@@ -17,6 +17,7 @@ import {
 import { DebateTimeBadges } from "@/features/debates/components/DebateTimeBadges";
 import { DebateRoomSkeleton } from "@/features/debates/components/DebateRoomSkeleton";
 import { isHostInvitation, rememberDebateRoom } from "@/features/debates/roomSession";
+import { ProfileAvatar } from "@/features/mypage/components/ProfileAvatar";
 import { useMyProfile } from "@/features/mypage/hooks/useMyProfile";
 import { requestAge } from "@/features/debates/candidateList";
 
@@ -230,7 +231,7 @@ export function JoinRoom({ inviteToken, debateId }: { inviteToken: string; debat
                 <div className={`rounded-2xl border p-5 ${hostIsPros ? "border-blue-200 bg-blue-50" : "border-rose-200 bg-rose-50"}`}>
                   <p className={`text-sm font-bold ${hostIsPros ? "text-blue-600" : "text-rose-600"}`}>{invitationQuery.data?.guestPosition === "PROS" ? "반대" : "찬성"} 진영</p>
                   <div className="mt-5 flex items-center gap-3">
-                    <span className={`flex h-11 w-11 items-center justify-center rounded-full font-bold text-white ${hostIsPros ? "bg-[var(--brand-blue)]" : "bg-rose-500"}`}>{hostIsPros ? "찬" : "반"}</span>
+                    <ProfileAvatar nickname={invitationQuery.data?.hostNickname ?? "개설자"} profileImageUrl={null} className="h-11 w-11" />
                     <div>
                       <p className="font-bold text-[var(--ink)]">{invitationQuery.data?.hostNickname ?? "개설자 정보 확인 중"}</p>
                       <p className="mt-1 text-xs text-[var(--ink-muted)]">상대방</p>
@@ -242,12 +243,12 @@ export function JoinRoom({ inviteToken, debateId }: { inviteToken: string; debat
 
                 <div className={`rounded-2xl border p-5 ${cancelled ? "border-gray-300 bg-gray-200" : hostIsPros ? "border-rose-200 bg-rose-50" : "border-blue-200 bg-blue-50"}`}>
                   <p className={`text-sm font-bold ${cancelled ? "text-gray-600" : hostIsPros ? "text-rose-600" : "text-blue-600"}`}>
-                    {invitationQuery.data?.guestPosition === "PROS" ? "찬성" : "반대"} 진영 <span className={cancelled ? "text-gray-600" : "text-[var(--ink)]"}>(나)</span>
+                    {invitationQuery.data?.guestPosition === "PROS" ? "찬성" : "반대"} 진영
                   </p>
                   <div className="mt-5 flex items-center gap-3">
-                    <span className={`flex h-11 w-11 items-center justify-center rounded-full font-bold text-white ${cancelled ? "bg-gray-500" : hostIsPros ? "bg-rose-500" : "bg-[var(--brand-blue)]"}`}>나</span>
+                    <ProfileAvatar nickname={profileQuery.data?.nickname ?? "내 정보"} profileImageUrl={profileQuery.data?.profileImageUrl ?? null} className={`h-11 w-11 ${cancelled ? "opacity-60" : ""}`} />
                     <div>
-                      <p className={`font-bold ${cancelled ? "text-gray-600" : "text-[var(--ink)]"}`}>{profileQuery.data?.nickname ?? "내 정보 확인 중"}</p>
+                      <p className={`font-bold ${cancelled ? "text-gray-600" : "text-[var(--ink)]"}`}>{profileQuery.data?.nickname ?? "내 정보 확인 중"}<span className="text-xs text-[var(--ink-muted)]">(나)</span></p>
                       <p className={`mt-1 text-xs ${cancelled ? "inline-flex rounded-full bg-rose-100 px-2 py-1 font-bold text-rose-700" : "text-[var(--ink-muted)]"}`}>
                         {cancelled
                           ? "참여 신청 취소됨"
