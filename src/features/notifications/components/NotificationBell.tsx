@@ -10,6 +10,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { useAuth } from "@/features/auth/context/AuthProvider";
 import { RelativeDate } from "@/features/debates/components/RelativeDate";
+import { useInProgressDebates } from "@/features/debates/hooks/useMyDebates";
 import {
   deleteNotification,
   markAllNotificationsRead,
@@ -54,6 +55,7 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const countQuery = useUnreadNotificationCount();
   const notificationsQuery = useNotifications(open);
+  const inProgressQuery = useInProgressDebates();
   const {
     fetchNextPage,
     hasNextPage,
@@ -61,6 +63,7 @@ export function NotificationBell() {
     refetch: refetchNotifications,
   } = notificationsQuery;
   const notifications = notificationsQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  const inProgressDebates = inProgressQuery.data?.items ?? [];
   const unreadCount = countQuery.data?.count ?? 0;
   const hasUnread = unreadCount > 0 || notifications.some((item) => !item.isRead);
   const invalidateNotifications = () =>
@@ -261,6 +264,39 @@ export function NotificationBell() {
           </div>
 
           <div ref={scrollRef} className="max-h-[min(70dvh,36rem)] overflow-y-auto">
+            {inProgressDebates.length ? (
+              <>
+                <ul className="divide-y divide-[var(--line)]" aria-label="진행 중인 토론">
+                  {inProgressDebates.map((debate) => (
+                    <li key={debate.debateId} className="relative flex items-start gap-1 p-2 hover:bg-[var(--surface-muted)]">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOpen(false);
+                          router.push(`/debates/${encodeURIComponent(debate.debateId)}`);
+                        }}
+                        className="flex min-w-0 flex-1 items-start gap-3 rounded-xl px-2 py-2 text-left"
+                      >
+                        <span className="mt-1.5 flex size-2 shrink-0 rounded-full bg-[var(--brand-blue)]" aria-hidden />
+                        <span className="min-w-0">
+                          <span className="flex min-w-0 items-center gap-2">
+                            <span className="truncate text-sm font-semibold leading-6 text-[var(--ink)]">{debate.title}</span>
+                            <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700">토론 진행중</span>
+                          </span>
+                          <span className="mt-1 flex flex-wrap items-center gap-1 text-xs text-[var(--ink-faint)]">
+                            <span>{debate.myRole === "HOST" ? "방장" : "참여자"} · {debate.myPosition === "PROS" ? "찬성" : "반대"}</span>
+                            <span aria-hidden>·</span>
+                            <RelativeDate value={debate.createdAt} now={inProgressQuery.dataUpdatedAt} />
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <div className="border-t border-[var(--line)]" aria-hidden />
+              </>
+            ) : null}
+
             {actionError ? (
               <p className="border-b border-[var(--danger-soft)] bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]" role="alert">
                 {actionError.message}
@@ -287,9 +323,9 @@ export function NotificationBell() {
                   다시 시도
                 </button>
               </div>
-            ) : notifications.length === 0 ? (
+            ) : notifications.length === 0 && inProgressDebates.length === 0 ? (
               <p className="px-5 py-12 text-center text-sm text-[var(--ink-muted)]">새로운 알림이 없습니다.</p>
-            ) : (
+            ) : notifications.length ? (
               <ul className="divide-y divide-[var(--line)]">
                 {notifications.map((notification) => {
                   const reading = readMutation.isPending && readMutation.variables === notification.notificationId;
@@ -336,7 +372,7 @@ export function NotificationBell() {
                   );
                 })}
               </ul>
-            )}
+            ) : null}
 
             <div ref={loadMoreRef} className="h-1" />
             {notificationsQuery.isFetchingNextPage ? (

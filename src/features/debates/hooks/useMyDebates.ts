@@ -1,6 +1,6 @@
 "use client";
 
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 
 import { useAuth } from "@/features/auth/context/AuthProvider";
 import { getMyDebates } from "@/features/debates/api/debates";
@@ -18,6 +18,20 @@ export function useMyDebates() {
     initialPageParam: null as string | null,
     getNextPageParam: (page) => page.hasNext ? page.nextCursor ?? undefined : undefined,
     enabled: isReady && Boolean(accessToken),
+    retry: (failureCount, error) =>
+      !(error instanceof ApiError && error.status === 401) && failureCount < 1,
+  });
+}
+
+export function useInProgressDebates() {
+  const { accessToken, isReady } = useAuth();
+
+  return useQuery({
+    queryKey: ["debates", "me", "in-progress", accessToken],
+    queryFn: () => getMyDebates(accessToken!, null, { status: ["IN_PROGRESS"], pageSize: 5 }),
+    enabled: isReady && Boolean(accessToken),
+    refetchInterval: 5_000,
+    refetchOnWindowFocus: true,
     retry: (failureCount, error) =>
       !(error instanceof ApiError && error.status === 401) && failureCount < 1,
   });

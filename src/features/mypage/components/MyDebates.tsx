@@ -35,6 +35,7 @@ function rememberHostRoom(debate: MyDebate) {
 
 function DebateItem({ debate, now }: { debate: MyDebate; now: number }) {
   const canManage = debate.myRole === "HOST" && debate.debateStatus === "WAITING";
+  const canEnter = debate.debateStatus === "READY" || debate.debateStatus === "IN_PROGRESS";
   const cancelled = debate.debateStatus === "CANCELLED";
   const badgeClass = isPastDebate(debate.debateStatus)
     ? cancelled
@@ -73,6 +74,13 @@ function DebateItem({ debate, now }: { debate: MyDebate; now: number }) {
             className="rounded-lg border border-[var(--line)] bg-white px-4 py-2 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-muted)]"
           >
             대기방 입장
+          </Link>
+        ) : canEnter ? (
+          <Link
+            href={`/debates/${encodeURIComponent(debate.debateId)}`}
+            className="rounded-lg border border-[var(--line)] bg-white px-4 py-2 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-muted)]"
+          >
+            토론방 입장
           </Link>
         ) : !isPastDebate(debate.debateStatus) ? (
           <span className="text-xs font-medium text-[var(--ink-faint)]">
