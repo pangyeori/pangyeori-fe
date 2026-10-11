@@ -22,6 +22,10 @@ test("host queue notifications link to the waiting room", () => {
     notificationHref("QUEUE_REQUEST_REMOVED", "debate-1"),
     "/debates/debate-1/waiting",
   );
+  assert.equal(
+    notificationHref("QUEUE_REQUEST_ACCEPTED", "debate/id"),
+    "/debates/debate%2Fid",
+  );
   assert.equal(notificationHref("QUEUE_REQUEST_REJECTED", "debate-1"), null);
 });
 

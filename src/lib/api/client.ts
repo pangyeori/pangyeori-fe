@@ -44,6 +44,11 @@ export function sseUrl(path: string) {
   return `${base.replace(/\/$/, "")}${path}`;
 }
 
+export function websocketUrl(path: string) {
+  const base = process.env.NEXT_PUBLIC_WS_BASE_URL ?? process.env.NEXT_PUBLIC_SSE_BASE_URL ?? window.location.origin;
+  return `${base.replace(/^http/, "ws").replace(/\/$/, "")}${path}`;
+}
+
 function isBackendEnvelope(body: unknown): body is BackendApiResponse {
   return Boolean(
     body &&

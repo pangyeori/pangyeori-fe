@@ -10,6 +10,18 @@ export type DebateLifecycleStatus =
   | "FINISHED"
   | "CANCELLED";
 export type DebateRole = "HOST" | "GUEST";
+export const debateStages = [
+  "NONE",
+  "OPENING_PROS",
+  "OPENING_CONS",
+  "VERDICT_1",
+  "REBUTTAL_PROS",
+  "REBUTTAL_CONS",
+  "VERDICT_2",
+  "FREE",
+  "FINAL_VERDICT",
+] as const;
+export type DebateStage = (typeof debateStages)[number];
 
 export type DebateStatus = {
   debateStatus: string;
@@ -55,6 +67,8 @@ export type DebateDetail = {
   hostPosition: Position;
   guestPosition: Position;
   status: DebateLifecycleStatus;
+  currentStage: DebateStage;
+  turnEndsAt: string | null;
   turnTimeSeconds: number;
   freeDebateTimeSeconds: number;
   inviteToken: string | null;
@@ -65,7 +79,7 @@ export type MyDebate = {
   title: string;
   description: string | null;
   debateStatus: DebateLifecycleStatus;
-  currentStage: string;
+  currentStage: DebateStage;
   myRole: DebateRole;
   myPosition: Position;
   opponent: {
@@ -75,6 +89,13 @@ export type MyDebate = {
   } | null;
   turnTimeSeconds: number;
   freeDebateTimeSeconds: number;
+  createdAt: string;
+};
+
+export type DebateHistory = {
+  id: string;
+  stage: DebateStage;
+  content: string | null;
   createdAt: string;
 };
 
@@ -98,15 +119,42 @@ export function getDebate(debateId: string, token: string) {
   return apiClient<DebateDetail>(`/api/v1/debates/${encodeURIComponent(debateId)}`, { token });
 }
 
+export function getDebateHistories(debateId: string, token: string) {
+  return apiClient<DebateHistory[]>(`/api/v1/debates/${encodeURIComponent(debateId)}/histories`, { token });
+}
+
+export function submitDebateHistory(debateId: string, content: string, token: string) {
+  return apiClient<DebateHistory>(`/api/v1/debates/${encodeURIComponent(debateId)}/histories`, {
+    method: "POST",
+    token,
+    body: { content },
+  });
+}
+
 export function getMyDebates(
   token: string,
   cursor: string | null = null,
-  options: { role?: DebateRole; pageSize?: number } = {},
+  options: { role?: DebateRole; status?: DebateLifecycleStatus[]; pageSize?: number } = {},
 ) {
   const query = new URLSearchParams({ pageSize: String(options.pageSize ?? 20) });
   if (cursor) query.set("cursor", cursor);
   if (options.role) query.set("role", options.role);
+  options.status?.forEach((status) => query.append("status", status));
   return apiClient<MyDebatesPage>(`/api/v1/debates/me?${query}`, { token });
+}
+
+export async function getMyDebate(debateId: string, token: string) {
+  let cursor: string | null = null;
+  do {
+    const page = await getMyDebates(token, cursor, {
+      status: ["READY", "IN_PROGRESS"],
+      pageSize: 50,
+    });
+    const debate = page.items.find((item) => item.debateId === debateId);
+    if (debate) return debate;
+    cursor = page.nextCursor;
+  } while (cursor);
+  return null;
 }
 
 export function getInvitation(inviteToken: string, token: string) {

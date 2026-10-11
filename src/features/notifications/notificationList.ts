@@ -10,6 +10,8 @@ export function unreadCountLabel(count: number) {
 export function notificationHref(type: NotificationType, debateId: string) {
   return type === "QUEUE_REQUEST_ADDED" || type === "QUEUE_REQUEST_REMOVED"
     ? `/debates/${encodeURIComponent(debateId)}/waiting`
+    : type === "QUEUE_REQUEST_ACCEPTED"
+      ? `/debates/${encodeURIComponent(debateId)}`
     : null;
 }
 
