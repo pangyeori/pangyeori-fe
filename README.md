@@ -48,6 +48,10 @@ pnpm install
 # 비워 두면 동일 출처의 Next.js 프록시를 사용합니다.
 NEXT_PUBLIC_API_BASE_URL=
 
+# SSE와 STOMP WebSocket 직접 연결 대상입니다.
+NEXT_PUBLIC_SSE_BASE_URL=http://localhost:8080
+NEXT_PUBLIC_WS_BASE_URL=http://localhost:8080
+
 # Next.js가 API 요청을 전달할 백엔드 주소입니다.
 BACKEND_URL=http://localhost:8080
 ```
