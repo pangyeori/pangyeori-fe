@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { Button } from "@/components/ui/Button";
@@ -28,7 +28,7 @@ import {
   speakingPosition,
 } from "@/features/debates/debateProgress";
 import { useDebatePresence } from "@/features/debates/hooks/useDebatePresence";
-import { resolvePresenceStatus, type PresenceStatus } from "@/features/debates/presenceEvents";
+import { mergeDebateHistoryEvent, resolvePresenceStatus, type PresenceStatus } from "@/features/debates/presenceEvents";
 import { getProfileImageViewUrl } from "@/features/mypage/api/getMyProfile";
 import { ProfileAvatar } from "@/features/mypage/components/ProfileAvatar";
 import { useMyProfile } from "@/features/mypage/hooks/useMyProfile";
@@ -39,6 +39,26 @@ const presenceLabels: Record<PresenceStatus, string> = {
   reconnecting: "재연결 중",
   left: "퇴장",
 };
+
+const messageTimeFormatter = new Intl.DateTimeFormat("ko-KR", {
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: true,
+});
+
+const messageDateTimeFormatter = new Intl.DateTimeFormat("ko-KR", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: true,
+});
+
+function formatMessageDateTime(date: Date) {
+  const parts = new Map(messageDateTimeFormatter.formatToParts(date).map(({ type, value }) => [type, value]));
+  return `${parts.get("year")}년 ${parts.get("month")}월 ${parts.get("day")}일 ${parts.get("dayPeriod")} ${parts.get("hour")}:${parts.get("minute")}`;
+}
 
 function positionLabel(position: Position) {
   return position === "PROS" ? "찬성" : "반대";
@@ -122,6 +142,9 @@ function HistoryItem({ history, hostPosition, myPosition, opponentName, opponent
   const position = speakingPosition(history.stage);
   const role = position ? roleForPosition(position, hostPosition) : null;
   const mine = Boolean(position && position === myPosition);
+  const submittedAt = new Date(parseServerTime(history.createdAt));
+  const messageTime = messageTimeFormatter.format(submittedAt);
+  const messageDateTime = formatMessageDateTime(submittedAt);
 
   return (
     <li className={`flex items-start gap-2 ${mine ? "justify-end" : "justify-start"}`}>
@@ -137,6 +160,14 @@ function HistoryItem({ history, hostPosition, myPosition, opponentName, opponent
             {history.content ?? "제한 시간 내에 발언하지 않았습니다."}
           </p>
         </article>
+        <time
+          className="mt-1 self-start text-[10px] text-[var(--ink-faint)] sm:text-xs"
+          dateTime={history.createdAt}
+          title={messageDateTime}
+          aria-label={messageDateTime}
+        >
+          {messageTime}
+        </time>
       </div>
     </li>
   );
@@ -144,6 +175,7 @@ function HistoryItem({ history, hostPosition, myPosition, opponentName, opponent
 
 export function DebateRoom({ debateId }: { debateId: string }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { accessToken, isReady } = useAuth();
   const [content, setContent] = useState("");
   const [scheduledContent, setScheduledContent] = useState("");
@@ -221,9 +253,14 @@ export function DebateRoom({ debateId }: { debateId: string }) {
   }, [presence.connectedAt, refetchDebate, refetchHistories, refetchMember]);
 
   useEffect(() => {
-    if (!presence.latestProgressEvent) return;
+    const event = presence.latestProgressEvent;
+    if (!event) return;
+    queryClient.setQueryData<DebateHistory[]>(
+      ["debates", debateId, "histories", accessToken],
+      (histories) => mergeDebateHistoryEvent(histories, event),
+    );
     void Promise.all([refetchDebate(), refetchHistories()]);
-  }, [presence.latestProgressEvent, refetchDebate, refetchHistories]);
+  }, [accessToken, debateId, presence.latestProgressEvent, queryClient, refetchDebate, refetchHistories]);
 
   useEffect(() => {
     if (!debateQuery.data?.turnEndsAt) return;
