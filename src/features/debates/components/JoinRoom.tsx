@@ -107,8 +107,10 @@ export function JoinRoom({ inviteToken, debateId }: { inviteToken: string; debat
   }, [hostInvitation, invitationQuery.data, inviteToken, router]);
 
   useEffect(() => {
-    if (accepted && !hostInvitation) router.replace("/debates/starting");
-  }, [accepted, hostInvitation, router]);
+    if (accepted && !hostInvitation && actualDebateId) {
+      router.replace(`/debates/${encodeURIComponent(actualDebateId)}`);
+    }
+  }, [accepted, actualDebateId, hostInvitation, router]);
 
   if (!isReady) return <DebateRoomSkeleton />;
   if (!inviteToken) return <p className="p-8 text-center" role="alert">초대 링크가 올바르지 않습니다.</p>;

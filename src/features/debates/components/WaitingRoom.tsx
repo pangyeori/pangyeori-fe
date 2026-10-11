@@ -148,8 +148,8 @@ export function WaitingRoom({ debateId, inviteToken }: { debateId: string; invit
   }, [toastVisible]);
 
   useEffect(() => {
-    if (confirmed) router.replace("/debates/starting");
-  }, [confirmed, router]);
+    if (confirmed) router.replace(`/debates/${encodeURIComponent(debateId)}`);
+  }, [confirmed, debateId, router]);
 
   const openShareModal = () => {
     if (!inviteUrl) {
