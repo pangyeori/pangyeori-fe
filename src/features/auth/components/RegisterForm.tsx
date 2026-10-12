@@ -402,7 +402,7 @@ export function RegisterForm() {
         prompt="이미 계정이 있으신가요?"
         href="/signin"
         linkLabel="로그인"
-        accent="blue"
+        accent="green"
       />
     </form>
   );

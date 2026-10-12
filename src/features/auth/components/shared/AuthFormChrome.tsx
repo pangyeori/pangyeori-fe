@@ -32,7 +32,7 @@ type AuthSwitchLinkProps = {
   prompt: string;
   href: string;
   linkLabel: string;
-  accent?: "danger" | "blue";
+  accent?: "danger" | "blue" | "green";
 };
 
 export function AuthSwitchLink({
@@ -41,8 +41,11 @@ export function AuthSwitchLink({
   linkLabel,
   accent = "danger",
 }: AuthSwitchLinkProps) {
-  const accentClass =
-    accent === "blue" ? "text-[var(--brand-blue)]" : "text-[var(--danger)]";
+  const accentClass = {
+    blue: "text-[var(--brand-blue)]",
+    danger: "text-[var(--danger)]",
+    green: "text-[var(--brand-green)]",
+  }[accent];
 
   return (
     <p className="pt-1 text-center text-sm text-[var(--ink-muted)]">

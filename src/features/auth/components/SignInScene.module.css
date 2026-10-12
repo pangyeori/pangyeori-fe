@@ -9,6 +9,7 @@
 
 .stage { position: relative; }
 .layer:not(.mascot), .ground { display: none; }
+.float { animation: float 6s ease-in-out infinite; }
 .image { width: 100%; height: auto; }
 
 @media (min-width: 640px) {
@@ -31,7 +32,6 @@
     pointer-events: none;
   }
   .layer:not(.mascot), .ground { display: block; }
-  .float { animation: float 6s ease-in-out infinite; }
   .ground {
     position: absolute; bottom: 6px; left: 28%; width: 44%; height: 22px;
     background: radial-gradient(ellipse, #3e527a24, transparent 70%);
@@ -95,7 +95,12 @@
   50% { transform: translateY(-8px); }
 }
 
-@media (prefers-reduced-motion: reduce), (hover: none), (pointer: coarse) {
+@media (hover: none), (pointer: coarse) {
+  .stage { transform: none; transition: none; }
+  .layer { transform: rotate(var(--tilt, 0deg)); transition: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
   .float { animation: none; }
   .stage { transform: none; transition: none; }
   .layer { transform: rotate(var(--tilt, 0deg)); transition: none; }
