@@ -10,7 +10,7 @@ export function RegisterIntro() {
         <h1 className="text-[22px] font-bold leading-snug tracking-tight text-[var(--ink)] sm:text-3xl lg:text-[40px]">
           당신의 첫 생각이,
           <br />
-          <span className="text-[#287c70]">새로운 대화의 시작.</span>
+          <span className="text-[var(--brand-green)]">새로운 대화의 시작.</span>
         </h1>
         <p className="mt-3 hidden max-w-sm text-[15px] leading-7 text-[var(--ink-muted)] lg:block">
           처음 오신 당신을 환영해요.
@@ -22,7 +22,7 @@ export function RegisterIntro() {
       <ol className="mt-6 hidden items-center justify-between gap-2 border-t border-[var(--line)] pt-5 text-xs text-[var(--ink-muted)] lg:flex">
         {["나만의 이름", "이메일 인증", "첫 토론 시작"].map((step, index) => (
           <li key={step} className="flex items-center gap-2">
-            <span aria-hidden="true" className="flex size-6 items-center justify-center rounded-full border border-[var(--line)] bg-white text-[10px] font-semibold text-[#287c70]">
+            <span aria-hidden="true" className="flex size-6 items-center justify-center rounded-full border border-[var(--line)] bg-white text-[10px] font-semibold text-[var(--brand-green)]">
               {String(index + 1).padStart(2, "0")}
             </span>
             {step}

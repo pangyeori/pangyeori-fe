@@ -12,6 +12,7 @@
   --line-strong: #d1d5db;
   --brand-blue: #2563eb;
   --brand-blue-soft: color-mix(in srgb, var(--brand-blue) 18%, transparent);
+  --brand-green: #287c70;
   --btn-primary: #111827;
   --btn-primary-hover: #000000;
   --kakao: #fee500;

@@ -178,7 +178,7 @@ export function SignInForm({ notice, next }: { notice?: string; next?: string })
           prompt="처음 오셨나요?"
           href="/register"
           linkLabel="회원가입"
-          accent="danger"
+          accent="blue"
         />
       </div>
     </form>
