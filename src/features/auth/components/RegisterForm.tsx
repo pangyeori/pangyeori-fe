@@ -278,7 +278,6 @@ export function RegisterForm() {
       />
 
       <EmailVerifyField
-        compactVerification
         onVerificationComplete={() => setFocus("password")}
         floatingLabel
         appearance="underline"
