@@ -99,6 +99,23 @@ export type DebateHistory = {
   createdAt: string;
 };
 
+export type DebateVerdictStatus = "SUCCESS" | "FAILED";
+export type WinnerPosition = Position | "DRAW";
+
+export type DebateVerdict = {
+  id: string;
+  stage: DebateStage;
+  status: DebateVerdictStatus;
+  winnerPosition: WinnerPosition | null;
+  reasoning: string | null;
+  createdAt: string;
+};
+
+export type DebateHistories = {
+  histories: DebateHistory[];
+  verdicts: DebateVerdict[];
+};
+
 export type MyDebatesPage = {
   items: MyDebate[];
   nextCursor: string | null;
@@ -120,7 +137,7 @@ export function getDebate(debateId: string, token: string) {
 }
 
 export function getDebateHistories(debateId: string, token: string) {
-  return apiClient<DebateHistory[]>(`/api/v1/debates/${encodeURIComponent(debateId)}/histories`, { token });
+  return apiClient<DebateHistories>(`/api/v1/debates/${encodeURIComponent(debateId)}/histories`, { token });
 }
 
 export function submitDebateHistory(debateId: string, content: string, token: string) {
