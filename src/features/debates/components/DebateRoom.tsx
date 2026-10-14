@@ -221,10 +221,6 @@ export function DebateRoom({ debateId }: { debateId: string }) {
     queryFn: () => getDebateHistories(debateId, accessToken!),
     enabled: Boolean(accessToken && entryAllowed),
     retry: false,
-    // Recover a missed verdict event without submitting another statement or AI request.
-    refetchInterval: (query) => debateQuery.data?.status === "IN_PROGRESS"
-      && query.state.status !== "error"
-      && awaitingVerdictStage(debateQuery.data.currentStage, query.state.data) ? 3000 : false,
   });
   const memberQuery = useQuery({
     queryKey: ["debates", debateId, "member", accessToken],

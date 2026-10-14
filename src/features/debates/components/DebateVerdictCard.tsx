@@ -21,7 +21,7 @@ export function DebateVerdictPendingCard({ stage, isFetching, onRetry }: {
         </span>
         <div>
           <p className="text-xs font-bold text-[var(--ink-muted)]">판겨리 AI</p>
-          <p className="mt-1 font-bold text-[var(--ink)]">{debateStageLabels[stage]}을 정리하고 있습니다<span className="motion-safe:animate-pulse" aria-hidden>...</span></p>
+          <p className="mt-1 font-bold text-[var(--ink)] motion-safe:animate-pulse">{debateStageLabels[stage]}을 정리하고 있습니다...</p>
         </div>
       </div>
       <button className="mt-3 text-xs font-semibold text-[var(--brand-blue)] underline disabled:opacity-50" type="button" disabled={isFetching} onClick={onRetry}>
