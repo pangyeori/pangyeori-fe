@@ -33,11 +33,12 @@ type Candidate = {
 };
 
 function CandidateAvatar({ candidate, token }: { candidate: Candidate; token: string }) {
+  const refreshedAfterImageError = useRef(false);
   const imageQuery = useQuery({
     queryKey: ["storage", "profile-image", candidate.profileImageKey, token],
     queryFn: () => getProfileImageViewUrl(candidate.profileImageKey!, token),
-    enabled: Boolean(candidate.profileImageKey),
-    retry: false,
+    enabled: Boolean(token && candidate.profileImageKey),
+    retry: 1,
   });
 
   return (
@@ -46,6 +47,11 @@ function CandidateAvatar({ candidate, token }: { candidate: Candidate; token: st
       nickname={candidate.name}
       profileImageUrl={imageQuery.data?.url ?? null}
       className="h-11 w-11"
+      onImageError={() => {
+        if (refreshedAfterImageError.current || imageQuery.isFetching) return;
+        refreshedAfterImageError.current = true;
+        void imageQuery.refetch();
+      }}
     />
   );
 }

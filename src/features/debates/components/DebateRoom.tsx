@@ -2,25 +2,28 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { Fragment, type FormEvent, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
 import { useAuth } from "@/features/auth/context/AuthProvider";
 import {
   getDebate,
   getDebateHistories,
   getMyDebate,
   submitDebateHistory,
+  debateStages,
   type DebateDetail,
   type DebateHistories,
   type DebateHistory,
   type DebateRole,
+  type DebateStage,
   type Position,
 } from "@/features/debates/api/debates";
 import { DebateRoomSkeleton } from "@/features/debates/components/DebateRoomSkeleton";
-import { DebateVerdictCard } from "@/features/debates/components/DebateVerdictCard";
+import { DebateVerdictCard, DebateVerdictPendingCard } from "@/features/debates/components/DebateVerdictCard";
 import { DebateTimeBadges, formatDebateTime } from "@/features/debates/components/DebateTimeBadges";
 import {
   debateStageLabels,
@@ -30,9 +33,10 @@ import {
   roleForPosition,
   speakingPosition,
 } from "@/features/debates/debateProgress";
+import { detectNewMessage } from "@/features/debates/debateMessages";
 import { useDebatePresence } from "@/features/debates/hooks/useDebatePresence";
-import { mergeDebateHistoriesEvent, resolvePresenceStatus, type PresenceStatus } from "@/features/debates/presenceEvents";
-import { canSubmitOpening, isAwaitingFirstVerdict } from "@/features/debates/debateVerdict";
+import { mergeDebateHistoriesEvent, type PresenceStatus } from "@/features/debates/presenceEvents";
+import { awaitingVerdictStage, canSubmitStatement } from "@/features/debates/debateVerdict";
 import { getProfileImageViewUrl } from "@/features/mypage/api/getMyProfile";
 import { ProfileAvatar } from "@/features/mypage/components/ProfileAvatar";
 import { useMyProfile } from "@/features/mypage/hooks/useMyProfile";
@@ -96,6 +100,49 @@ function HostMark() {
         <path d="m3 5 3.2 3L10 3l3.8 5L17 5l-1.2 9H4.2L3 5Zm1.5 11h11v1.5h-11V16Z" />
       </svg>
     </span>
+  );
+}
+
+function StageNotice({ stage }: { stage: DebateStage }) {
+  return (
+    <li className="flex items-center gap-3 py-2" role="status">
+      <span className="h-px flex-1 bg-slate-100" aria-hidden />
+      <p className="shrink-0 rounded-full bg-slate-100 px-4 py-2 text-center text-[11px] font-medium text-slate-500 sm:text-xs">
+        {stage === "FREE" ? "자유 토론이 시작되었습니다." : `${debateStageLabels[stage]} 단계가 시작되었습니다.`}
+      </p>
+      <span className="h-px flex-1 bg-slate-100" aria-hidden />
+    </li>
+  );
+}
+
+function DebateStageProgress({ currentStage }: { currentStage: DebateStage }) {
+  const currentIndex = debateStages.indexOf(currentStage);
+
+  return (
+    <ol className="mt-4 space-y-2">
+      {debateStages.slice(1).map((stage, index) => {
+        const stageIndex = index + 1;
+        const current = stage === currentStage;
+        const complete = stageIndex < currentIndex;
+
+        return (
+          <li
+            key={stage}
+            aria-current={current ? "step" : undefined}
+            className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors ${
+              current
+                ? "border-blue-200 bg-blue-50 text-blue-800"
+                : complete
+                  ? "border-slate-200 bg-slate-100 text-slate-500"
+                  : "border-[var(--line)] bg-white text-[var(--ink-faint)]"
+            }`}
+          >
+            <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${current ? "bg-[var(--brand-blue)] shadow-[0_0_0_4px_rgba(59,130,246,0.14)]" : complete ? "bg-slate-400" : "bg-slate-200"}`} aria-hidden />
+            <span className="text-xs font-bold">{debateStageLabels[stage]}</span>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -186,6 +233,8 @@ export function DebateRoom({ debateId }: { debateId: string }) {
   const [submitError, setSubmitError] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const [showFloatingProgress, setShowFloatingProgress] = useState(false);
+  const [newMessagePreview, setNewMessagePreview] = useState<string | null>(null);
+  const [exitOpen, setExitOpen] = useState(false);
 
   const debateQuery = useQuery({
     queryKey: ["debates", debateId, "detail", accessToken],
@@ -197,9 +246,8 @@ export function DebateRoom({ debateId }: { debateId: string }) {
       const debate = query.state.data;
       if (debate?.status === "READY") return 1000;
       return debate?.status === "IN_PROGRESS"
-        && (debate.currentStage === "OPENING_PROS"
-          || debate.currentStage === "OPENING_CONS"
-          || debate.currentStage === "VERDICT_1") ? 3000 : false;
+        && debate.currentStage !== "FREE"
+        && debate.currentStage !== "FINAL_VERDICT" ? 3000 : false;
     },
   });
   const entryAllowed = debateQuery.data?.status === "READY" || debateQuery.data?.status === "IN_PROGRESS";
@@ -208,10 +256,6 @@ export function DebateRoom({ debateId }: { debateId: string }) {
     queryFn: () => getDebateHistories(debateId, accessToken!),
     enabled: Boolean(accessToken && entryAllowed),
     retry: false,
-    // Recover a missed verdict event without submitting another statement or AI request.
-    refetchInterval: (query) => debateQuery.data?.status === "IN_PROGRESS"
-      && query.state.status !== "error"
-      && !query.state.data?.verdicts.some((verdict) => verdict.stage === "VERDICT_1") ? 3000 : false,
   });
   const memberQuery = useQuery({
     queryKey: ["debates", debateId, "member", accessToken],
@@ -232,6 +276,7 @@ export function DebateRoom({ debateId }: { debateId: string }) {
   const scheduledSubmissionInFlight = useRef(false);
   const messageViewport = useRef<HTMLDivElement>(null);
   const shouldStickToLatestMessage = useRef(true);
+  const latestMessageId = useRef<string | null>(null);
   const statementInput = useRef<HTMLTextAreaElement>(null);
   const { refetch: refetchDebate } = debateQuery;
   const { refetch: refetchHistories } = historiesQuery;
@@ -316,7 +361,18 @@ export function DebateRoom({ debateId }: { debateId: string }) {
     return () => window.removeEventListener("scroll", updateFloatingProgress);
   }, [entryAllowed]);
 
-  const awaitingVerdict = isAwaitingFirstVerdict(debateQuery.data?.currentStage ?? "NONE", historiesQuery.data);
+  const pendingVerdictStage = awaitingVerdictStage(debateQuery.data?.currentStage ?? "NONE", historiesQuery.data);
+  const awaitingVerdict = Boolean(pendingVerdictStage);
+
+  useEffect(() => {
+    const next = detectNewMessage(
+      latestMessageId.current,
+      historiesQuery.data?.histories,
+      shouldStickToLatestMessage.current,
+    );
+    latestMessageId.current = next.latestId;
+    if (next.preview) setNewMessagePreview(next.preview);
+  }, [historiesQuery.data?.histories]);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
@@ -325,12 +381,13 @@ export function DebateRoom({ debateId }: { debateId: string }) {
       }
     });
     return () => cancelAnimationFrame(frame);
-  }, [historiesQuery.data?.histories.length, historiesQuery.data?.verdicts.length, awaitingVerdict, scheduledContent]);
+  }, [debateQuery.data?.currentStage, historiesQuery.data?.histories.length, historiesQuery.data?.verdicts.length, awaitingVerdict, scheduledContent]);
 
   const shouldFocusStatement = debateQuery.data?.status === "IN_PROGRESS"
-    && canSubmitOpening(debateQuery.data.currentStage, historiesQuery.data)
+    && debateQuery.data.currentStage !== "FREE"
+    && canSubmitStatement(debateQuery.data.currentStage, historiesQuery.data)
     && !awaitingVerdict
-    && speakingPosition(debateQuery.data?.currentStage ?? "NONE") === memberQuery.data?.myPosition;
+    && speakingPosition(debateQuery.data.currentStage) === memberQuery.data?.myPosition;
 
   useEffect(() => {
     if (shouldFocusStatement) statementInput.current?.focus();
@@ -364,12 +421,13 @@ export function DebateRoom({ debateId }: { debateId: string }) {
   const debate = debateQuery.data;
   const member = memberQuery.data;
   const myPosition = member?.myPosition;
-  const currentSpeaker = canSubmitOpening(debate.currentStage, historiesQuery.data) && !awaitingVerdict ? speakingPosition(debate.currentStage) : null;
+  const currentSpeaker = canSubmitStatement(debate.currentStage, historiesQuery.data) && !awaitingVerdict ? speakingPosition(debate.currentStage) : null;
   const started = presence.started || debate.status === "IN_PROGRESS";
-  const isMyTurn = started && Boolean(currentSpeaker && currentSpeaker === myPosition);
-  const canCompose = started && Boolean(member && currentSpeaker) && !scheduledContent;
-  const isPrewriting = canCompose && !isMyTurn;
+  const isFreeDebate = debate.currentStage === "FREE";
   const remainingSeconds = remainingTurnSeconds(debate.turnEndsAt, now);
+  const isMyTurn = started && !isFreeDebate && Boolean(currentSpeaker && currentSpeaker === myPosition);
+  const canCompose = started && !isFreeDebate && Boolean(member) && Boolean(currentSpeaker) && !scheduledContent;
+  const isPrewriting = canCompose && !isMyTurn;
   const myNickname = profileQuery.data?.nickname ?? "내 정보 확인 중";
   const hostName = member?.myRole === "HOST" ? `${myNickname}(나)` : member?.opponent?.nickname ?? "개설자";
   const guestName = member?.myRole === "GUEST" ? `${myNickname}(나)` : member?.opponent?.nickname ?? "게스트";
@@ -378,28 +436,34 @@ export function DebateRoom({ debateId }: { debateId: string }) {
   const opponentProfileImageUrl = opponentImageQuery.data?.url ?? null;
   const histories = historiesQuery.data?.histories;
   const verdicts = historiesQuery.data?.verdicts;
-  const firstVerdict = verdicts?.find((verdict) => verdict.stage === "VERDICT_1");
+  const currentVerdict = verdicts?.find((verdict) => verdict.stage === debate.currentStage);
+  const currentStageIndex = debateStages.indexOf(debate.currentStage);
+  const timelineStages = currentStageIndex > 0 ? debateStages.slice(1, currentStageIndex + 1) : [];
   const hostProfileImageUrl = member?.myRole === "HOST" ? myProfileImageUrl : opponentProfileImageUrl;
   const guestProfileImageUrl = member?.myRole === "GUEST" ? myProfileImageUrl : opponentProfileImageUrl;
   const turnStatusLabel = !member
     ? "차례 확인 중"
+    : isFreeDebate
+      ? "자유 토론"
     : isMyTurn
       ? "내 차례"
       : currentSpeaker
         ? "상대방 차례"
-        : awaitingVerdict ? "AI 판결 중" : firstVerdict ? "1차 판결 완료" : "입장 대기";
+        : awaitingVerdict ? "AI 판결 중" : currentVerdict ? "AI 판결 완료" : "다음 단계 대기";
   const inputPlaceholder = !started
     ? "토론 시작을 기다리고 있습니다."
     : !member
       ? "내 진영 정보를 확인하고 있습니다."
       : awaitingVerdict
         ? "AI가 양측 발언을 검토하고 있습니다."
+      : isFreeDebate
+        ? "자유 토론 메시지 연결을 준비하고 있습니다."
       : currentSpeaker === null
-        ? firstVerdict ? "반론 제출 기능은 준비 중입니다." : "다음 토론 단계를 기다리고 있습니다."
+        ? "다음 토론 단계를 기다리고 있습니다."
         : scheduledContent
           ? "예약한 발언을 취소하면 다시 입력할 수 있습니다."
         : isMyTurn
-          ? `${positionLabel(currentSpeaker)} 측 입론을 입력하세요.`
+          ? `${debateStageLabels[debate.currentStage]} 내용을 입력하세요.`
           : "내 차례에 보낼 발언을 미리 입력하세요.";
 
   const submitStatement = (event: FormEvent<HTMLFormElement>) => {
@@ -463,16 +527,16 @@ export function DebateRoom({ debateId }: { debateId: string }) {
             </span>
           </div>
 
-          {started && currentSpeaker ? (
+          {started && (currentSpeaker || isFreeDebate) ? (
             <div className="mt-4 flex items-end justify-between rounded-xl bg-[var(--surface-muted)] px-4 py-3">
               <div>
-                <p className="text-xs font-semibold text-[var(--ink-muted)]">남은 발언 시간</p>
+                <p className="text-xs font-semibold text-[var(--ink-muted)]">{isFreeDebate ? "남은 자유 토론 시간" : "남은 발언 시간"}</p>
                 <p className={`mt-1 font-mono text-3xl font-bold tracking-tight ${remainingSeconds === 0 ? "text-[var(--danger)]" : "text-[var(--ink)]"}`} aria-live="polite">
                   {formatTurnTime(remainingSeconds)}
                 </p>
               </div>
               <p className="pb-1 text-right text-xs font-semibold text-[var(--ink-muted)]">
-                {positionLabel(currentSpeaker)} 측 발언<br />제한 {formatDebateTime(debate.turnTimeSeconds)}
+                {isFreeDebate ? "양측 자유 발언" : `${positionLabel(currentSpeaker!)} 측 발언`}<br />제한 {formatDebateTime(isFreeDebate ? debate.freeDebateTimeSeconds : debate.turnTimeSeconds)}
               </p>
             </div>
           ) : (
@@ -482,7 +546,7 @@ export function DebateRoom({ debateId }: { debateId: string }) {
           )}
 
           <div className="mt-4 border-t border-[var(--line)] pt-4">
-            <Button variant="outline" className="!h-10" onClick={() => router.push("/mypage")}>
+            <Button variant="outline" className="!h-10" onClick={() => setExitOpen(true)}>
               나가기
             </Button>
           </div>
@@ -500,8 +564,8 @@ export function DebateRoom({ debateId }: { debateId: string }) {
           <aside className="rounded-2xl border border-[var(--line)] bg-white p-4 shadow-[0_12px_40px_rgba(16,24,40,0.05)] sm:p-5">
             <h2 className="font-bold text-[var(--ink)]">참여자</h2>
             <ul className="mt-3 grid grid-cols-2 gap-2 lg:block lg:space-y-3">
-              <ParticipantCard role="HOST" position={debate.hostPosition} status={resolvePresenceStatus(presence.roles.HOST, started)} name={hostName} profileImageUrl={hostProfileImageUrl} />
-              <ParticipantCard role="GUEST" position={debate.guestPosition} status={resolvePresenceStatus(presence.roles.GUEST, started)} name={guestName} profileImageUrl={guestProfileImageUrl} />
+              <ParticipantCard role="HOST" position={debate.hostPosition} status={presence.roles.HOST} name={hostName} profileImageUrl={hostProfileImageUrl} />
+              <ParticipantCard role="GUEST" position={debate.guestPosition} status={presence.roles.GUEST} name={guestName} profileImageUrl={guestProfileImageUrl} />
             </ul>
           </aside>
 
@@ -509,21 +573,23 @@ export function DebateRoom({ debateId }: { debateId: string }) {
             <div className="flex items-center justify-between border-b border-[var(--line)] px-5 py-4">
               <div>
                 <h2 className="font-bold text-[var(--ink)]">토론 발언</h2>
-                <p className="mt-1 text-xs text-[var(--ink-muted)]">양측이 한 번씩 입론을 제출하면 AI가 자동으로 판결합니다.</p>
+                <p className="mt-1 text-xs text-[var(--ink-muted)]">단계에 따라 발언과 AI 판결이 실시간으로 표시됩니다.</p>
               </div>
               <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isMyTurn ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600"}`}>
                 {turnStatusLabel}
               </span>
             </div>
 
-            <div
-              ref={messageViewport}
-              className="min-h-56 max-h-[60vh] overflow-y-auto overscroll-contain p-4 sm:min-h-72 sm:p-5 lg:max-h-[640px]"
-              onScroll={(event) => {
-                const element = event.currentTarget;
-                shouldStickToLatestMessage.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
-              }}
-            >
+            <div className="relative">
+              <div
+                ref={messageViewport}
+                className="min-h-56 max-h-[60vh] overflow-y-auto overscroll-y-auto p-4 sm:min-h-72 sm:p-5 lg:max-h-[640px]"
+                onScroll={(event) => {
+                  const element = event.currentTarget;
+                  shouldStickToLatestMessage.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
+                  if (shouldStickToLatestMessage.current) setNewMessagePreview(null);
+                }}
+              >
               {historiesQuery.isPending ? (
                 <div className="space-y-5 motion-safe:animate-pulse" aria-label="발언 내역 불러오는 중">
                   <div className="h-20 w-4/5 rounded-2xl bg-slate-100" />
@@ -536,22 +602,36 @@ export function DebateRoom({ debateId }: { debateId: string }) {
                     다시 시도
                   </button>
                 </div>
-              ) : histories?.length || verdicts?.length || scheduledContent ? (
+              ) : timelineStages.length || histories?.length || verdicts?.length || scheduledContent ? (
                 <ol className="space-y-5">
-                  {histories?.map((history) => (
-                    <HistoryItem
-                      key={history.id}
-                      history={history}
-                      hostPosition={debate.hostPosition}
-                      myPosition={myPosition}
-                      opponentName={opponentName}
-                      opponentProfileImageUrl={opponentProfileImageUrl}
-                    />
-                  ))}
-                  {verdicts?.map((verdict) => (
-                    <li key={`verdict-${verdict.id}`}>
-                      <DebateVerdictCard verdict={verdict} />
-                    </li>
+                  {timelineStages.map((stage) => (
+                    <Fragment key={stage}>
+                      <StageNotice stage={stage} />
+                      {histories?.filter((history) => history.stage === stage).map((history) => (
+                        <HistoryItem
+                          key={history.id}
+                          history={history}
+                          hostPosition={debate.hostPosition}
+                          myPosition={myPosition}
+                          opponentName={opponentName}
+                          opponentProfileImageUrl={opponentProfileImageUrl}
+                        />
+                      ))}
+                      {verdicts?.filter((verdict) => verdict.stage === stage).map((verdict) => (
+                        <li key={`verdict-${verdict.id}`}>
+                          <DebateVerdictCard key={verdict.id} verdict={verdict} />
+                        </li>
+                      ))}
+                      {pendingVerdictStage === stage && !verdicts?.some((verdict) => verdict.stage === stage) ? (
+                        <li>
+                          <DebateVerdictPendingCard
+                            stage={stage}
+                            isFetching={historiesQuery.isFetching}
+                            onRetry={() => void Promise.all([refetchDebate(), refetchHistories()])}
+                          />
+                        </li>
+                      ) : null}
+                    </Fragment>
                   ))}
                   {scheduledContent ? (
                     <li className="flex justify-end">
@@ -583,22 +663,31 @@ export function DebateRoom({ debateId }: { debateId: string }) {
                   {started ? "첫 발언을 기다리고 있습니다." : "두 참여자가 입장하면 토론이 시작됩니다."}
                 </p>
               )}
-              {awaitingVerdict ? (
-                <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-5" role="status" aria-live="polite">
-                  <p className="font-bold text-[var(--ink)]">AI가 양측 발언을 검토하고 있습니다</p>
-                  <p className="mt-2 text-sm text-[var(--ink-muted)]">판결이 완료되면 우세 진영과 근거가 여기에 표시됩니다. 잠시 기다려 주세요.</p>
-                  <button className="mt-3 text-sm font-semibold text-[var(--brand-blue)] underline disabled:opacity-50" type="button" disabled={historiesQuery.isFetching} onClick={() => void Promise.all([refetchDebate(), refetchHistories()])}>
-                    {historiesQuery.isFetching ? "결과 확인 중…" : "결과 다시 확인"}
-                  </button>
-                </div>
-              ) : null}
               {historiesQuery.isError && historiesQuery.data ? (
                 <div className="mt-4 text-sm text-[var(--danger)]" role="alert">
                   <p>{historiesQuery.error instanceof Error ? historiesQuery.error.message : "최신 발언과 판결을 불러오지 못했습니다."}</p>
                   <button className="mt-2 underline" type="button" onClick={() => void Promise.all([refetchDebate(), refetchHistories()])}>다시 조회</button>
                 </div>
               ) : null}
-              {firstVerdict ? <p className="mt-4 text-xs text-[var(--ink-muted)]">1차 판결 처리가 끝났습니다. 다음 반론 제출 기능은 준비 중입니다.</p> : null}
+              </div>
+              {newMessagePreview ? (
+                <button
+                  type="button"
+                  className="absolute inset-x-4 bottom-3 mx-auto flex max-w-sm items-center gap-2 rounded-full border border-[var(--line)] bg-white px-4 py-2.5 text-left text-xs shadow-[0_8px_24px_rgba(15,23,42,0.16)] sm:inset-x-5"
+                  aria-label="최신 메시지로 이동"
+                  onClick={() => {
+                    const viewport = messageViewport.current;
+                    if (!viewport) return;
+                    shouldStickToLatestMessage.current = true;
+                    setNewMessagePreview(null);
+                    viewport.scrollTo({ top: viewport.scrollHeight, behavior: "smooth" });
+                  }}
+                >
+                  <span className="shrink-0 font-bold text-[var(--brand-blue)]">새 메시지</span>
+                  <span className="min-w-0 flex-1 truncate text-[var(--ink-muted)]">{newMessagePreview}</span>
+                  <span className="text-base text-[var(--ink-muted)]" aria-hidden>↓</span>
+                </button>
+              ) : null}
             </div>
 
             <form className="border-t border-[var(--line)] p-4 sm:p-5" onSubmit={submitStatement}>
@@ -606,6 +695,7 @@ export function DebateRoom({ debateId }: { debateId: string }) {
               <textarea
                 ref={statementInput}
                 id="debate-statement"
+                aria-describedby="debate-statement-help"
                 rows={1}
                 className={`h-11 max-h-36 min-h-11 w-full resize-none overflow-y-hidden rounded-xl border border-[var(--line)] px-4 py-2.5 text-sm leading-6 outline-none transition focus:border-[var(--brand-blue)] focus:ring-2 focus:ring-[var(--brand-blue-soft)] disabled:cursor-not-allowed disabled:opacity-70 ${isPrewriting ? "bg-slate-100" : isMyTurn ? "bg-white" : "bg-[var(--surface-muted)]"}`}
                 value={content}
@@ -616,10 +706,16 @@ export function DebateRoom({ debateId }: { debateId: string }) {
                   setContent(event.target.value);
                   resizeStatementInput(event.currentTarget);
                 }}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
+                  event.preventDefault();
+                  event.currentTarget.form?.requestSubmit();
+                }}
               />
               <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                 <div>
                   <span className="text-xs text-[var(--ink-faint)]">{content.length}/1000</span>
+                  <p id="debate-statement-help" className="mt-1 text-[11px] text-[var(--ink-faint)]">전송 Enter · 줄바꿈 Shift + Enter</p>
                   {submitError ? <p className="mt-1 text-xs font-semibold text-[var(--danger)]" role="alert">{submitError}</p> : null}
                 </div>
                 <Button className="!h-10 sm:!w-auto sm:px-5" type="submit" loading={submitMutation.isPending} disabled={!canCompose || !content.trim()}>
@@ -629,27 +725,44 @@ export function DebateRoom({ debateId }: { debateId: string }) {
             </form>
           </section>
 
-          <aside className="hidden space-y-4 lg:block">
-            <section className="rounded-2xl border border-[var(--line)] bg-white p-5">
+          <aside className="hidden lg:sticky lg:top-6 lg:block">
+            <section className="rounded-2xl border border-[var(--line)] bg-white p-5 shadow-[0_12px_40px_rgba(16,24,40,0.05)]">
               <h2 className="font-bold text-[var(--ink)]">진행 단계</h2>
-              <p className="mt-4 rounded-xl bg-[var(--surface-muted)] p-4 text-sm font-semibold text-[var(--ink-muted)]">
-                {debateStageLabels[debate.currentStage]}
-              </p>
-              {started && currentSpeaker ? (
+              <DebateStageProgress currentStage={debate.currentStage} />
+              {started && (currentSpeaker || isFreeDebate) ? (
                 <div className="mt-3 rounded-xl border border-[var(--line)] px-4 py-3">
-                  <p className="text-xs font-semibold text-[var(--ink-muted)]">남은 발언 시간</p>
+                  <p className="text-xs font-semibold text-[var(--ink-muted)]">{isFreeDebate ? "남은 자유 토론 시간" : "남은 발언 시간"}</p>
                   <p className={`mt-1 font-mono text-2xl font-bold ${remainingSeconds === 0 ? "text-[var(--danger)]" : "text-[var(--ink)]"}`} aria-live="polite">
                     {formatTurnTime(remainingSeconds)}
                   </p>
                 </div>
               ) : null}
+              <div className="mt-5 border-t border-[var(--line)] pt-5">
+                <button
+                  type="button"
+                  onClick={() => setExitOpen(true)}
+                  className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-[var(--line)] bg-white px-3 text-sm font-semibold text-[var(--ink)] hover:bg-[var(--surface-muted)]"
+                >
+                  나가기
+                </button>
+              </div>
             </section>
-            <Button variant="outline" className="!h-10" onClick={() => router.push("/mypage")}>
-              나가기
-            </Button>
           </aside>
         </div>
       </main>
+      <Modal open={exitOpen} title="토론방에서 나갈까요?" onClose={() => setExitOpen(false)}>
+        <p className="text-center">
+          토론은 계속 진행되며,
+          <br />
+          마이페이지에서 다시 들어올 수 있습니다.
+        </p>
+        <div className="mt-6 flex gap-3">
+          <Button variant="outline" onClick={() => setExitOpen(false)}>계속 참여하기</Button>
+          <Link href="/mypage" className="inline-flex h-12 w-full items-center justify-center rounded-lg bg-[var(--btn-primary)] px-5 text-[15px] font-semibold text-white hover:bg-[var(--btn-primary-hover)]">
+            나가기
+          </Link>
+        </div>
+      </Modal>
     </div>
   );
 }

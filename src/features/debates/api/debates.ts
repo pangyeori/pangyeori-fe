@@ -35,6 +35,11 @@ export type DebateStatus = {
   }[] | null;
 };
 
+export type DebatePresenceSnapshot = {
+  hostConnected: boolean;
+  guestConnected: boolean;
+};
+
 export type Invitation = {
   debateId: string;
   title: string;
@@ -134,6 +139,10 @@ export function createDebate(token: string, body: {
 
 export function getDebate(debateId: string, token: string) {
   return apiClient<DebateDetail>(`/api/v1/debates/${encodeURIComponent(debateId)}`, { token });
+}
+
+export function getDebatePresence(debateId: string, token: string) {
+  return apiClient<DebatePresenceSnapshot>(`/api/v1/debates/${encodeURIComponent(debateId)}/presence`, { token });
 }
 
 export function getDebateHistories(debateId: string, token: string) {

@@ -45,7 +45,6 @@ try {
   const data = { histories: [], verdicts: [] };
   let submits = 0;
   let historyGets = 0;
-  let historyError = false;
   ws.addEventListener("message", ({ data: raw }) => {
     const message = JSON.parse(raw);
     if (pending.has(message.id)) {
@@ -74,7 +73,6 @@ try {
         debate.currentStage = "OPENING_CONS";
       } else {
         historyGets++;
-        status = historyError ? 503 : 200;
         result = data;
       }
     } else { status = 404; errors.push(`Unexpected API: ${path}`); }
@@ -107,23 +105,23 @@ try {
     field.dispatchEvent(new Event('input', {bubbles:true}));
   })()`);
   await until("!document.querySelector('button[type=submit]').disabled");
-  await evaluate("document.querySelector('button[type=submit]').click()");
+  await evaluate("document.querySelector('#debate-statement').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))");
   await until("document.body.innerText.includes('찬성 측 실제 제출 동작 검증')");
   assert.equal(submits, 1);
   data.histories.push({ id: "opening-cons", stage: "OPENING_CONS", content: "상대의 반대 입론", createdAt: new Date().toISOString() });
   debate.currentStage = "VERDICT_1";
   debate.turnEndsAt = null;
-  await until("document.body.innerText.includes('AI가 양측 발언을 검토하고 있습니다')");
+  await until("document.body.innerText.includes('1차 판정을 정리하고 있습니다')");
   assert.equal(await evaluate("document.querySelector('#debate-statement').disabled"), true);
-  historyError = true;
-  await until("document.body.innerText.includes('테스트 서버 오류 원문')");
-  assert.equal(await evaluate("document.body.innerText.includes('상대의 반대 입론')"), true);
-  historyError = false;
+  const readsWhilePending = historyGets;
+  await pause(3500);
+  assert.equal(historyGets, readsWhilePending, "pending verdict does not poll histories");
+  assert.equal(await evaluate("document.body.innerText.includes('결과 다시 확인')"), false, "retry stays hidden during the first five minutes");
   data.verdicts.push({ id: "verdict-1", stage: "VERDICT_1", status: "SUCCESS", winnerPosition: "PROS", reasoning: "찬성 측이 구체적인 근거를 제시했습니다.", createdAt: new Date().toISOString() });
   debate.currentStage = "REBUTTAL_PROS";
-  await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent === '다시 조회').click()");
+  await call("Page.reload");
   await until("document.body.innerText.includes('찬성 측 우세')");
-  assert.equal(await evaluate("document.querySelector('#debate-statement').disabled"), true);
+  assert.equal(await evaluate("document.querySelector('#debate-statement').disabled"), false);
   const readsAfterResult = historyGets;
   await pause(3500);
   assert.equal(historyGets, readsAfterResult, "polling stops when verdict is stored");
@@ -135,9 +133,18 @@ try {
   data.verdicts[0] = { ...data.verdicts[0], status: "FAILED", winnerPosition: null, reasoning: null };
   await call("Page.reload");
   await until("document.body.innerText.includes('AI 판결을 완료하지 못했습니다')");
-  assert.equal(submits, 1, "refresh/retry never resubmits the statement");
+  debate.currentStage = "FREE";
+  debate.turnEndsAt = new Date(Date.now() + 4000).toISOString();
+  await call("Page.reload");
+  await until("document.querySelector('[aria-current=step]')?.textContent.includes('자유 토론')");
+  await until("document.querySelector('#debate-statement')?.disabled");
+  assert.equal(await evaluate("document.querySelector('#debate-statement').placeholder"), "자유 토론 메시지 연결을 준비하고 있습니다.");
+  assert.equal(submits, 1, "free debate never uses the statement API");
+  await pause(4500);
+  assert.equal(await evaluate("document.querySelector('#debate-statement').disabled"), true);
+  assert.equal(submits, 1, "free debate does not create local mock messages");
   assert.deepEqual(errors, []);
-  console.log("PASS: submit → both statements → pending → recoverable error → verdict; refresh, draw, failure, polling stop, no duplicate submission");
+  console.log("PASS: statement → pending without polling → verdict → free-debate disabled without mocks");
   await call("Browser.close");
 } finally {
   ws?.close();
