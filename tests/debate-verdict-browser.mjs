@@ -105,7 +105,7 @@ try {
     field.dispatchEvent(new Event('input', {bubbles:true}));
   })()`);
   await until("!document.querySelector('button[type=submit]').disabled");
-  await evaluate("document.querySelector('button[type=submit]').click()");
+  await evaluate("document.querySelector('#debate-statement').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))");
   await until("document.body.innerText.includes('찬성 측 실제 제출 동작 검증')");
   assert.equal(submits, 1);
   data.histories.push({ id: "opening-cons", stage: "OPENING_CONS", content: "상대의 반대 입론", createdAt: new Date().toISOString() });

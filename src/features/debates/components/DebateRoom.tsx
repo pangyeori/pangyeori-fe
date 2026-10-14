@@ -33,6 +33,7 @@ import {
   roleForPosition,
   speakingPosition,
 } from "@/features/debates/debateProgress";
+import { detectNewMessage } from "@/features/debates/debateMessages";
 import { useDebatePresence } from "@/features/debates/hooks/useDebatePresence";
 import { mergeDebateHistoriesEvent, type PresenceStatus } from "@/features/debates/presenceEvents";
 import { awaitingVerdictStage, canSubmitStatement } from "@/features/debates/debateVerdict";
@@ -232,6 +233,7 @@ export function DebateRoom({ debateId }: { debateId: string }) {
   const [submitError, setSubmitError] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const [showFloatingProgress, setShowFloatingProgress] = useState(false);
+  const [newMessagePreview, setNewMessagePreview] = useState<string | null>(null);
   const [exitOpen, setExitOpen] = useState(false);
 
   const debateQuery = useQuery({
@@ -274,6 +276,7 @@ export function DebateRoom({ debateId }: { debateId: string }) {
   const scheduledSubmissionInFlight = useRef(false);
   const messageViewport = useRef<HTMLDivElement>(null);
   const shouldStickToLatestMessage = useRef(true);
+  const latestMessageId = useRef<string | null>(null);
   const statementInput = useRef<HTMLTextAreaElement>(null);
   const { refetch: refetchDebate } = debateQuery;
   const { refetch: refetchHistories } = historiesQuery;
@@ -360,6 +363,16 @@ export function DebateRoom({ debateId }: { debateId: string }) {
 
   const pendingVerdictStage = awaitingVerdictStage(debateQuery.data?.currentStage ?? "NONE", historiesQuery.data);
   const awaitingVerdict = Boolean(pendingVerdictStage);
+
+  useEffect(() => {
+    const next = detectNewMessage(
+      latestMessageId.current,
+      historiesQuery.data?.histories,
+      shouldStickToLatestMessage.current,
+    );
+    latestMessageId.current = next.latestId;
+    if (next.preview) setNewMessagePreview(next.preview);
+  }, [historiesQuery.data?.histories]);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
@@ -567,14 +580,16 @@ export function DebateRoom({ debateId }: { debateId: string }) {
               </span>
             </div>
 
-            <div
-              ref={messageViewport}
-              className="min-h-56 max-h-[60vh] overflow-y-auto overscroll-y-auto p-4 sm:min-h-72 sm:p-5 lg:max-h-[640px]"
-              onScroll={(event) => {
-                const element = event.currentTarget;
-                shouldStickToLatestMessage.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
-              }}
-            >
+            <div className="relative">
+              <div
+                ref={messageViewport}
+                className="min-h-56 max-h-[60vh] overflow-y-auto overscroll-y-auto p-4 sm:min-h-72 sm:p-5 lg:max-h-[640px]"
+                onScroll={(event) => {
+                  const element = event.currentTarget;
+                  shouldStickToLatestMessage.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
+                  if (shouldStickToLatestMessage.current) setNewMessagePreview(null);
+                }}
+              >
               {historiesQuery.isPending ? (
                 <div className="space-y-5 motion-safe:animate-pulse" aria-label="발언 내역 불러오는 중">
                   <div className="h-20 w-4/5 rounded-2xl bg-slate-100" />
@@ -654,6 +669,25 @@ export function DebateRoom({ debateId }: { debateId: string }) {
                   <button className="mt-2 underline" type="button" onClick={() => void Promise.all([refetchDebate(), refetchHistories()])}>다시 조회</button>
                 </div>
               ) : null}
+              </div>
+              {newMessagePreview ? (
+                <button
+                  type="button"
+                  className="absolute inset-x-4 bottom-3 mx-auto flex max-w-sm items-center gap-2 rounded-full border border-[var(--line)] bg-white px-4 py-2.5 text-left text-xs shadow-[0_8px_24px_rgba(15,23,42,0.16)] sm:inset-x-5"
+                  aria-label="최신 메시지로 이동"
+                  onClick={() => {
+                    const viewport = messageViewport.current;
+                    if (!viewport) return;
+                    shouldStickToLatestMessage.current = true;
+                    setNewMessagePreview(null);
+                    viewport.scrollTo({ top: viewport.scrollHeight, behavior: "smooth" });
+                  }}
+                >
+                  <span className="shrink-0 font-bold text-[var(--brand-blue)]">새 메시지</span>
+                  <span className="min-w-0 flex-1 truncate text-[var(--ink-muted)]">{newMessagePreview}</span>
+                  <span className="text-base text-[var(--ink-muted)]" aria-hidden>↓</span>
+                </button>
+              ) : null}
             </div>
 
             <form className="border-t border-[var(--line)] p-4 sm:p-5" onSubmit={submitStatement}>
@@ -661,6 +695,7 @@ export function DebateRoom({ debateId }: { debateId: string }) {
               <textarea
                 ref={statementInput}
                 id="debate-statement"
+                aria-describedby="debate-statement-help"
                 rows={1}
                 className={`h-11 max-h-36 min-h-11 w-full resize-none overflow-y-hidden rounded-xl border border-[var(--line)] px-4 py-2.5 text-sm leading-6 outline-none transition focus:border-[var(--brand-blue)] focus:ring-2 focus:ring-[var(--brand-blue-soft)] disabled:cursor-not-allowed disabled:opacity-70 ${isPrewriting ? "bg-slate-100" : isMyTurn ? "bg-white" : "bg-[var(--surface-muted)]"}`}
                 value={content}
@@ -671,10 +706,16 @@ export function DebateRoom({ debateId }: { debateId: string }) {
                   setContent(event.target.value);
                   resizeStatementInput(event.currentTarget);
                 }}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
+                  event.preventDefault();
+                  event.currentTarget.form?.requestSubmit();
+                }}
               />
               <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                 <div>
                   <span className="text-xs text-[var(--ink-faint)]">{content.length}/1000</span>
+                  <p id="debate-statement-help" className="mt-1 text-[11px] text-[var(--ink-faint)]">전송 Enter · 줄바꿈 Shift + Enter</p>
                   {submitError ? <p className="mt-1 text-xs font-semibold text-[var(--danger)]" role="alert">{submitError}</p> : null}
                 </div>
                 <Button className="!h-10 sm:!w-auto sm:px-5" type="submit" loading={submitMutation.isPending} disabled={!canCompose || !content.trim()}>
