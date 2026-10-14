@@ -1,4 +1,4 @@
-import type { DebateHistories, DebateHistory, DebateRole, DebateStage, DebateVerdictStatus, WinnerPosition } from "@/features/debates/api/debates";
+import type { DebateHistories, DebateHistory, DebatePresenceSnapshot, DebateRole, DebateStage, DebateVerdictStatus, WinnerPosition } from "@/features/debates/api/debates";
 
 const debateStages: DebateStage[] = [
   "NONE",
@@ -48,8 +48,19 @@ export const initialDebatePresence: DebatePresence = {
   message: "참여자 입장을 기다리고 있습니다.",
 };
 
-export function resolvePresenceStatus(status: PresenceStatus, started: boolean) {
-  return started && status === "unknown" ? "entered" : status;
+export function applyDebatePresenceSnapshot(
+  current: DebatePresence,
+  snapshot: DebatePresenceSnapshot,
+  roles: DebateRole[] = ["HOST", "GUEST"],
+): DebatePresence {
+  const nextRoles = { ...current.roles };
+  if (roles.includes("HOST")) nextRoles.HOST = snapshot.hostConnected ? "entered" : "left";
+  if (roles.includes("GUEST")) nextRoles.GUEST = snapshot.guestConnected ? "entered" : "left";
+  return {
+    ...current,
+    roles: nextRoles,
+    message: "현재 접속 상태를 확인했습니다.",
+  };
 }
 
 export function parseDebateConnectionEvent(raw: string, debateId: string): DebateConnectionEvent | null {

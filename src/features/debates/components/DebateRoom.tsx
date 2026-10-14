@@ -33,7 +33,7 @@ import {
   speakingPosition,
 } from "@/features/debates/debateProgress";
 import { useDebatePresence } from "@/features/debates/hooks/useDebatePresence";
-import { mergeDebateHistoriesEvent, resolvePresenceStatus, type PresenceStatus } from "@/features/debates/presenceEvents";
+import { mergeDebateHistoriesEvent, type PresenceStatus } from "@/features/debates/presenceEvents";
 import { awaitingVerdictStage, canSubmitStatement } from "@/features/debates/debateVerdict";
 import { getProfileImageViewUrl } from "@/features/mypage/api/getMyProfile";
 import { ProfileAvatar } from "@/features/mypage/components/ProfileAvatar";
@@ -516,8 +516,8 @@ export function DebateRoom({ debateId }: { debateId: string }) {
           <aside className="rounded-2xl border border-[var(--line)] bg-white p-4 shadow-[0_12px_40px_rgba(16,24,40,0.05)] sm:p-5">
             <h2 className="font-bold text-[var(--ink)]">참여자</h2>
             <ul className="mt-3 grid grid-cols-2 gap-2 lg:block lg:space-y-3">
-              <ParticipantCard role="HOST" position={debate.hostPosition} status={resolvePresenceStatus(presence.roles.HOST, started)} name={hostName} profileImageUrl={hostProfileImageUrl} />
-              <ParticipantCard role="GUEST" position={debate.guestPosition} status={resolvePresenceStatus(presence.roles.GUEST, started)} name={guestName} profileImageUrl={guestProfileImageUrl} />
+              <ParticipantCard role="HOST" position={debate.hostPosition} status={presence.roles.HOST} name={hostName} profileImageUrl={hostProfileImageUrl} />
+              <ParticipantCard role="GUEST" position={debate.guestPosition} status={presence.roles.GUEST} name={guestName} profileImageUrl={guestProfileImageUrl} />
             </ul>
           </aside>
 
