@@ -141,9 +141,25 @@ try {
   data.verdicts[0] = { ...data.verdicts[0], status: "FAILED", winnerPosition: null, reasoning: null };
   await call("Page.reload");
   await until("document.body.innerText.includes('AI 판결을 완료하지 못했습니다')");
+  debate.currentStage = "FREE";
+  debate.turnEndsAt = new Date(Date.now() + 4000).toISOString();
+  await call("Page.reload");
+  await until("document.querySelector('[aria-current=step]')?.textContent.includes('자유 토론')");
+  await until("document.querySelector('#debate-statement') && !document.querySelector('#debate-statement').disabled");
+  await evaluate(`(() => {
+    const field = document.querySelector('#debate-statement');
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(field, '자유 토론 화면 전용 발언');
+    field.dispatchEvent(new Event('input', {bubbles:true}));
+  })()`);
+  await until("!document.querySelector('button[type=submit]').disabled");
+  await evaluate("document.querySelector('button[type=submit]').click()");
+  await until("document.body.innerText.includes('자유 토론 화면 전용 발언')");
+  assert.equal(submits, 1, "mock free-debate message never reaches the statement API");
+  await until("document.body.innerText.includes('자유 토론 이후 기능은 개발 예정입니다.')");
+  assert.equal(await evaluate("document.querySelector('#debate-statement').disabled"), true);
   assert.equal(submits, 1, "refresh/retry never resubmits the statement");
   assert.deepEqual(errors, []);
-  console.log("PASS: submit → both statements → pending → recoverable error → verdict; refresh, draw, failure, polling stop, no duplicate submission");
+  console.log("PASS: statement → pending without polling → retry → verdict → free-debate mock → planned notice");
   await call("Browser.close");
 } finally {
   ws?.close();
