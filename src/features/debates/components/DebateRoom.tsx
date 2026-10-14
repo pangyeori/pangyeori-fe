@@ -182,15 +182,14 @@ function ParticipantCard({ role, position, status, name, profileImageUrl }: {
   );
 }
 
-function HistoryItem({ history, authorPosition, hostPosition, myPosition, opponentName, opponentProfileImageUrl }: {
+function HistoryItem({ history, hostPosition, myPosition, opponentName, opponentProfileImageUrl }: {
   history: DebateHistory;
-  authorPosition?: Position;
   hostPosition: Position;
   myPosition: Position | undefined;
   opponentName: string;
   opponentProfileImageUrl: string | null;
 }) {
-  const position = authorPosition ?? speakingPosition(history.stage);
+  const position = speakingPosition(history.stage);
   const role = position ? roleForPosition(position, hostPosition) : null;
   const mine = Boolean(position && position === myPosition);
   const submittedAt = new Date(parseServerTime(history.createdAt));
@@ -234,9 +233,6 @@ export function DebateRoom({ debateId }: { debateId: string }) {
   const [now, setNow] = useState(() => Date.now());
   const [showFloatingProgress, setShowFloatingProgress] = useState(false);
   const [exitOpen, setExitOpen] = useState(false);
-  // shortcut: Free-debate messages and the fallback timer reset on refresh until the backend supports them.
-  const [mockFreeEndsAt, setMockFreeEndsAt] = useState<number | null>(null);
-  const [mockFreeMessages, setMockFreeMessages] = useState<DebateHistory[]>([]);
 
   const debateQuery = useQuery({
     queryKey: ["debates", debateId, "detail", accessToken],
@@ -339,19 +335,10 @@ export function DebateRoom({ debateId }: { debateId: string }) {
   }, [accessToken, debateId, presence.latestProgressEvent, queryClient, refetchDebate, refetchHistories]);
 
   useEffect(() => {
-    if (!debateQuery.data?.turnEndsAt && debateQuery.data?.currentStage !== "FREE") return;
+    if (!debateQuery.data?.turnEndsAt) return;
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
-  }, [debateQuery.data?.currentStage, debateQuery.data?.turnEndsAt]);
-
-  useEffect(() => {
-    const debate = debateQuery.data;
-    const timer = window.setTimeout(() => {
-      if (!debate || debate.currentStage !== "FREE" || debate.turnEndsAt) setMockFreeEndsAt(null);
-      else setMockFreeEndsAt((current) => current ?? Date.now() + debate.freeDebateTimeSeconds * 1000);
-    });
-    return () => window.clearTimeout(timer);
-  }, [debateQuery.data]);
+  }, [debateQuery.data?.turnEndsAt]);
 
   useEffect(() => {
     const turnEndsAt = debateQuery.data?.turnEndsAt;
@@ -381,15 +368,13 @@ export function DebateRoom({ debateId }: { debateId: string }) {
       }
     });
     return () => cancelAnimationFrame(frame);
-  }, [debateQuery.data?.currentStage, historiesQuery.data?.histories.length, historiesQuery.data?.verdicts.length, awaitingVerdict, mockFreeMessages.length, scheduledContent]);
+  }, [debateQuery.data?.currentStage, historiesQuery.data?.histories.length, historiesQuery.data?.verdicts.length, awaitingVerdict, scheduledContent]);
 
-  const freeDebateRemaining = mockFreeEndsAt === null ? null : Math.max(0, Math.ceil((mockFreeEndsAt - now) / 1000));
   const shouldFocusStatement = debateQuery.data?.status === "IN_PROGRESS"
-    && (debateQuery.data.currentStage === "FREE"
-      ? (remainingTurnSeconds(debateQuery.data.turnEndsAt, now) ?? freeDebateRemaining) !== 0
-      : canSubmitStatement(debateQuery.data.currentStage, historiesQuery.data)
-        && !awaitingVerdict
-        && speakingPosition(debateQuery.data.currentStage) === memberQuery.data?.myPosition);
+    && debateQuery.data.currentStage !== "FREE"
+    && canSubmitStatement(debateQuery.data.currentStage, historiesQuery.data)
+    && !awaitingVerdict
+    && speakingPosition(debateQuery.data.currentStage) === memberQuery.data?.myPosition;
 
   useEffect(() => {
     if (shouldFocusStatement) statementInput.current?.focus();
@@ -426,10 +411,9 @@ export function DebateRoom({ debateId }: { debateId: string }) {
   const currentSpeaker = canSubmitStatement(debate.currentStage, historiesQuery.data) && !awaitingVerdict ? speakingPosition(debate.currentStage) : null;
   const started = presence.started || debate.status === "IN_PROGRESS";
   const isFreeDebate = debate.currentStage === "FREE";
-  const remainingSeconds = remainingTurnSeconds(debate.turnEndsAt, now) ?? (isFreeDebate ? freeDebateRemaining : null);
-  const freeDebateEnded = isFreeDebate && remainingSeconds === 0;
-  const isMyTurn = started && (isFreeDebate ? !freeDebateEnded : Boolean(currentSpeaker && currentSpeaker === myPosition));
-  const canCompose = started && Boolean(member) && (isFreeDebate ? !freeDebateEnded : Boolean(currentSpeaker) && !scheduledContent);
+  const remainingSeconds = remainingTurnSeconds(debate.turnEndsAt, now);
+  const isMyTurn = started && !isFreeDebate && Boolean(currentSpeaker && currentSpeaker === myPosition);
+  const canCompose = started && !isFreeDebate && Boolean(member) && Boolean(currentSpeaker) && !scheduledContent;
   const isPrewriting = canCompose && !isMyTurn;
   const myNickname = profileQuery.data?.nickname ?? "내 정보 확인 중";
   const hostName = member?.myRole === "HOST" ? `${myNickname}(나)` : member?.opponent?.nickname ?? "개설자";
@@ -447,7 +431,7 @@ export function DebateRoom({ debateId }: { debateId: string }) {
   const turnStatusLabel = !member
     ? "차례 확인 중"
     : isFreeDebate
-      ? freeDebateEnded ? "개발 예정" : "자유 토론"
+      ? "자유 토론"
     : isMyTurn
       ? "내 차례"
       : currentSpeaker
@@ -460,7 +444,7 @@ export function DebateRoom({ debateId }: { debateId: string }) {
       : awaitingVerdict
         ? "AI가 양측 발언을 검토하고 있습니다."
       : isFreeDebate
-        ? freeDebateEnded ? "자유 토론 이후 기능은 개발 예정입니다." : "자유롭게 의견을 입력하세요."
+        ? "자유 토론 메시지 연결을 준비하고 있습니다."
       : currentSpeaker === null
         ? "다음 토론 단계를 기다리고 있습니다."
         : scheduledContent
@@ -475,17 +459,6 @@ export function DebateRoom({ debateId }: { debateId: string }) {
     if (!canCompose || !statement || submitMutation.isPending) return;
     setSubmitError("");
     shouldStickToLatestMessage.current = true;
-    if (isFreeDebate) {
-      setMockFreeMessages((messages) => [...messages, {
-        id: `free-${Date.now()}`,
-        stage: "FREE",
-        content: statement,
-        createdAt: new Date().toISOString(),
-      }]);
-      setContent("");
-      if (statementInput.current) resetStatementInput(statementInput.current);
-      return;
-    }
     if (!isMyTurn) {
       setScheduledContent(statement);
       setContent("");
@@ -614,7 +587,7 @@ export function DebateRoom({ debateId }: { debateId: string }) {
                     다시 시도
                   </button>
                 </div>
-              ) : timelineStages.length || histories?.length || verdicts?.length || mockFreeMessages.length || scheduledContent ? (
+              ) : timelineStages.length || histories?.length || verdicts?.length || scheduledContent ? (
                 <ol className="space-y-5">
                   {timelineStages.map((stage) => (
                     <Fragment key={stage}>
@@ -629,17 +602,6 @@ export function DebateRoom({ debateId }: { debateId: string }) {
                           opponentProfileImageUrl={opponentProfileImageUrl}
                         />
                       ))}
-                      {stage === "FREE" ? mockFreeMessages.map((history) => (
-                        <HistoryItem
-                          key={history.id}
-                          history={history}
-                          authorPosition={myPosition}
-                          hostPosition={debate.hostPosition}
-                          myPosition={myPosition}
-                          opponentName={opponentName}
-                          opponentProfileImageUrl={opponentProfileImageUrl}
-                        />
-                      )) : null}
                       {verdicts?.filter((verdict) => verdict.stage === stage).map((verdict) => (
                         <li key={`verdict-${verdict.id}`}>
                           <DebateVerdictCard key={verdict.id} verdict={verdict} />
@@ -652,11 +614,6 @@ export function DebateRoom({ debateId }: { debateId: string }) {
                             isFetching={historiesQuery.isFetching}
                             onRetry={() => void Promise.all([refetchDebate(), refetchHistories()])}
                           />
-                        </li>
-                      ) : null}
-                      {stage === "FREE" && freeDebateEnded ? (
-                        <li className="rounded-xl bg-[var(--surface-muted)] px-4 py-5 text-center text-sm font-semibold text-[var(--ink-muted)]">
-                          자유 토론 이후 기능은 개발 예정입니다.
                         </li>
                       ) : null}
                     </Fragment>
