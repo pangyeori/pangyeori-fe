@@ -6,6 +6,7 @@ type ProfileAvatarProps = {
   nickname: string;
   profileImageUrl: string | null;
   className?: string;
+  onImageError?: () => void;
 };
 
 function DefaultProfileIcon() {
@@ -28,6 +29,7 @@ export function ProfileAvatar({
   nickname,
   profileImageUrl,
   className = "size-28 sm:size-32",
+  onImageError,
 }: ProfileAvatarProps) {
   const [hasImageError, setHasImageError] = useState(false);
   const shouldShowImage = Boolean(profileImageUrl) && !hasImageError;
@@ -41,7 +43,10 @@ export function ProfileAvatar({
           src={profileImageUrl ?? undefined}
           alt={`${nickname}님의 프로필`}
           className="h-full w-full object-cover"
-          onError={() => setHasImageError(true)}
+          onError={() => {
+            setHasImageError(true);
+            onImageError?.();
+          }}
         />
       ) : (
         <DefaultProfileIcon />

@@ -4,9 +4,10 @@ import { useEffect, useState } from "react";
 import { Client } from "@stomp/stompjs";
 
 import { useAuth } from "@/features/auth/context/AuthProvider";
-import type { DebateRole } from "@/features/debates/api/debates";
+import { getDebatePresence, type DebateRole } from "@/features/debates/api/debates";
 import {
   applyDebateConnectionEvent,
+  applyDebatePresenceSnapshot,
   confirmDebateDeparture,
   initialDebatePresence,
   isDebateProgressEvent,
@@ -30,6 +31,8 @@ export function useDebatePresence(debateId: string, enabled: boolean) {
     if (!accessToken || !enabled) return;
 
     let active = true;
+    let connectionRevision = 0;
+    const roleVersions: Record<DebateRole, number> = { HOST: 0, GUEST: 0 };
     const leaveTimers: Partial<Record<DebateRole, ReturnType<typeof setTimeout>>> = {};
     const clearLeaveTimer = (role: DebateRole) => {
       if (leaveTimers[role]) clearTimeout(leaveTimers[role]);
@@ -49,6 +52,7 @@ export function useDebatePresence(debateId: string, enabled: boolean) {
 
     client.onConnect = () => {
       if (!active) return;
+      const currentConnectionRevision = ++connectionRevision;
       setConnectionStatus("connected");
       setConnectedAt(Date.now());
       client.subscribe(`/sub/debates/${debateId}`, ({ body }) => {
@@ -58,6 +62,13 @@ export function useDebatePresence(debateId: string, enabled: boolean) {
         if (isDebateProgressEvent(event)) {
           setLatestProgressEvent(event);
           return;
+        }
+
+        if (event.type === "STARTED") {
+          roleVersions.HOST += 1;
+          roleVersions.GUEST += 1;
+        } else if (event.role) {
+          roleVersions[event.role] += 1;
         }
 
         if (event.type === "LEFT" && event.role) {
@@ -75,11 +86,24 @@ export function useDebatePresence(debateId: string, enabled: boolean) {
         else if (event.role) clearLeaveTimer(event.role);
         setPresence((current) => applyDebateConnectionEvent(current, event));
       });
+
+      const requestedRoleVersions = { ...roleVersions };
+      void getDebatePresence(debateId, accessToken).then((snapshot) => {
+        if (!active || connectionRevision !== currentConnectionRevision) return;
+        const unchangedRoles = (["HOST", "GUEST"] as DebateRole[])
+          .filter((role) => roleVersions[role] === requestedRoleVersions[role]);
+        if (unchangedRoles.length > 0) {
+          setPresence((current) => applyDebatePresenceSnapshot(current, snapshot, unchangedRoles));
+        }
+      }).catch(() => {
+        // WebSocket events keep presence usable when snapshot recovery fails.
+      });
     };
     client.onStompError = () => active && setConnectionStatus("error");
     client.onWebSocketError = () => active && setConnectionStatus("error");
     client.onWebSocketClose = () => {
       if (!active) return;
+      connectionRevision += 1;
       clearLeaveTimers();
       setPresence(initialDebatePresence);
       setConnectionStatus("reconnecting");

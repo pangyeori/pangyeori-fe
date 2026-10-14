@@ -3,13 +3,13 @@ import { test } from "node:test";
 
 import {
   applyDebateConnectionEvent,
+  applyDebatePresenceSnapshot,
   confirmDebateDeparture,
   initialDebatePresence,
   isDebateProgressEvent,
   mergeDebateHistoryEvent,
   mergeDebateHistoriesEvent,
   parseDebateConnectionEvent,
-  resolvePresenceStatus,
 } from "./presenceEvents.ts";
 
 test("applies entered, left, and started events", () => {
@@ -41,8 +41,23 @@ test("applies entered, left, and started events", () => {
     GUEST: "entered",
   });
   assert.equal(parseDebateConnectionEvent("not-json", "debate-1"), null);
-  assert.equal(resolvePresenceStatus("unknown", true), "entered");
-  assert.equal(resolvePresenceStatus("left", true), "left");
+});
+
+test("restores current participants from a presence snapshot", () => {
+  const restored = applyDebatePresenceSnapshot(initialDebatePresence, {
+    hostConnected: false,
+    guestConnected: true,
+  });
+  assert.deepEqual(restored.roles, { HOST: "left", GUEST: "entered" });
+
+  const eventWon = applyDebatePresenceSnapshot({
+    ...initialDebatePresence,
+    roles: { HOST: "entered", GUEST: "reconnecting" },
+  }, {
+    hostConnected: false,
+    guestConnected: false,
+  }, ["HOST"]);
+  assert.deepEqual(eventWon.roles, { HOST: "left", GUEST: "reconnecting" });
 });
 
 // Contract fixtures only: no requests to the external API and no product mock data.
