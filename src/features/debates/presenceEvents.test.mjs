@@ -7,6 +7,7 @@ import {
   initialDebatePresence,
   isDebateProgressEvent,
   mergeDebateHistoryEvent,
+  mergeDebateHistoriesEvent,
   parseDebateConnectionEvent,
   resolvePresenceStatus,
 } from "./presenceEvents.ts";
@@ -42,6 +43,42 @@ test("applies entered, left, and started events", () => {
   assert.equal(parseDebateConnectionEvent("not-json", "debate-1"), null);
   assert.equal(resolvePresenceStatus("unknown", true), "entered");
   assert.equal(resolvePresenceStatus("left", true), "left");
+});
+
+// Contract fixtures only: no requests to the external API and no product mock data.
+test("verdict events accept all results and never change participant presence", () => {
+  for (const winnerPosition of ["PROS", "CONS", "DRAW"]) {
+    const event = parseDebateConnectionEvent(JSON.stringify({
+      debateId: "debate-1", type: "VERDICT_ISSUED", role: null,
+      stage: "VERDICT_1", verdictStatus: "SUCCESS", winnerPosition, reasoning: "판결 근거",
+    }), "debate-1");
+    assert.ok(event);
+    assert.equal(isDebateProgressEvent(event), true);
+    assert.equal(applyDebateConnectionEvent(initialDebatePresence, event), initialDebatePresence);
+    assert.equal(mergeDebateHistoriesEvent(undefined, event), undefined, "REST supplies the verdict id and timestamp");
+  }
+  const failed = { debateId: "debate-1", type: "VERDICT_ISSUED", stage: "VERDICT_1", verdictStatus: "FAILED", winnerPosition: null, reasoning: null };
+  assert.ok(parseDebateConnectionEvent(JSON.stringify(failed), "debate-1"));
+  for (const invalid of [
+    { ...failed, debateId: "other" },
+    { ...failed, verdictStatus: "PENDING" },
+    { ...failed, verdictStatus: "SUCCESS" },
+    { ...failed, stage: "OPENING_PROS" },
+    { ...failed, winnerPosition: "PROS" },
+  ]) assert.equal(parseDebateConnectionEvent(JSON.stringify(invalid), "debate-1"), null);
+});
+
+test("statement cache updates preserve stored verdicts and deduplicate repeated events", () => {
+  const verdicts = [{ id: "verdict-1", stage: "VERDICT_1", status: "FAILED", winnerPosition: null, reasoning: null, createdAt: "2026-10-12T12:00:00" }];
+  const data = { histories: [], verdicts };
+  const event = {
+    debateId: "debate-1", type: "STATEMENT_SUBMITTED", role: "HOST",
+    stage: "OPENING_PROS", content: "입론", submittedAt: "2026-10-12T11:59:00",
+  };
+  const merged = mergeDebateHistoriesEvent(data, event);
+  assert.equal(merged.verdicts, verdicts);
+  assert.equal(mergeDebateHistoriesEvent(merged, event).histories.length, 1);
+  assert.equal(data.histories.length, 0);
 });
 
 test("accepts debate progress events with their required fields", () => {
