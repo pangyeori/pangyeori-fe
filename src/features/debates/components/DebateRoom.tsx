@@ -13,11 +13,14 @@ import {
   getDebateHistories,
   getMyDebate,
   submitDebateHistory,
+  type DebateDetail,
+  type DebateHistories,
   type DebateHistory,
   type DebateRole,
   type Position,
 } from "@/features/debates/api/debates";
 import { DebateRoomSkeleton } from "@/features/debates/components/DebateRoomSkeleton";
+import { DebateVerdictCard } from "@/features/debates/components/DebateVerdictCard";
 import { DebateTimeBadges, formatDebateTime } from "@/features/debates/components/DebateTimeBadges";
 import {
   debateStageLabels,
@@ -28,7 +31,8 @@ import {
   speakingPosition,
 } from "@/features/debates/debateProgress";
 import { useDebatePresence } from "@/features/debates/hooks/useDebatePresence";
-import { mergeDebateHistoryEvent, resolvePresenceStatus, type PresenceStatus } from "@/features/debates/presenceEvents";
+import { mergeDebateHistoriesEvent, resolvePresenceStatus, type PresenceStatus } from "@/features/debates/presenceEvents";
+import { canSubmitOpening, isAwaitingFirstVerdict } from "@/features/debates/debateVerdict";
 import { getProfileImageViewUrl } from "@/features/mypage/api/getMyProfile";
 import { ProfileAvatar } from "@/features/mypage/components/ProfileAvatar";
 import { useMyProfile } from "@/features/mypage/hooks/useMyProfile";
@@ -188,7 +192,15 @@ export function DebateRoom({ debateId }: { debateId: string }) {
     queryFn: () => getDebate(debateId, accessToken!),
     enabled: isReady && Boolean(accessToken),
     retry: false,
-    refetchInterval: (query) => query.state.data?.status === "READY" ? 1000 : false,
+    refetchInterval: (query) => {
+      if (query.state.status === "error") return false;
+      const debate = query.state.data;
+      if (debate?.status === "READY") return 1000;
+      return debate?.status === "IN_PROGRESS"
+        && (debate.currentStage === "OPENING_PROS"
+          || debate.currentStage === "OPENING_CONS"
+          || debate.currentStage === "VERDICT_1") ? 3000 : false;
+    },
   });
   const entryAllowed = debateQuery.data?.status === "READY" || debateQuery.data?.status === "IN_PROGRESS";
   const historiesQuery = useQuery({
@@ -196,6 +208,10 @@ export function DebateRoom({ debateId }: { debateId: string }) {
     queryFn: () => getDebateHistories(debateId, accessToken!),
     enabled: Boolean(accessToken && entryAllowed),
     retry: false,
+    // Recover a missed verdict event without submitting another statement or AI request.
+    refetchInterval: (query) => debateQuery.data?.status === "IN_PROGRESS"
+      && query.state.status !== "error"
+      && !query.state.data?.verdicts.some((verdict) => verdict.stage === "VERDICT_1") ? 3000 : false,
   });
   const memberQuery = useQuery({
     queryKey: ["debates", debateId, "member", accessToken],
@@ -223,7 +239,14 @@ export function DebateRoom({ debateId }: { debateId: string }) {
 
   const submitMutation = useMutation({
     mutationFn: (statement: string) => submitDebateHistory(debateId, statement, accessToken!),
-    onSuccess: () => {
+    onSuccess: (history) => {
+      queryClient.setQueryData<DebateHistories>(
+        ["debates", debateId, "histories", accessToken],
+        (data) => ({
+          histories: [...(data?.histories ?? []).filter((item) => item.stage !== history.stage), history],
+          verdicts: data?.verdicts ?? [],
+        }),
+      );
       setContent("");
       setScheduledContent("");
       scheduledSubmissionInFlight.current = false;
@@ -255,9 +278,16 @@ export function DebateRoom({ debateId }: { debateId: string }) {
   useEffect(() => {
     const event = presence.latestProgressEvent;
     if (!event) return;
-    queryClient.setQueryData<DebateHistory[]>(
+    if (event.debateId !== debateId) return;
+    if (event.type === "STAGE_CHANGED" && event.stage) {
+      queryClient.setQueryData<DebateDetail>(
+        ["debates", debateId, "detail", accessToken],
+        (data) => data ? { ...data, currentStage: event.stage!, turnEndsAt: event.turnEndsAt ?? null } : data,
+      );
+    }
+    queryClient.setQueryData<DebateHistories>(
       ["debates", debateId, "histories", accessToken],
-      (histories) => mergeDebateHistoryEvent(histories, event),
+      (data) => mergeDebateHistoriesEvent(data, event),
     );
     void Promise.all([refetchDebate(), refetchHistories()]);
   }, [accessToken, debateId, presence.latestProgressEvent, queryClient, refetchDebate, refetchHistories]);
@@ -286,6 +316,8 @@ export function DebateRoom({ debateId }: { debateId: string }) {
     return () => window.removeEventListener("scroll", updateFloatingProgress);
   }, [entryAllowed]);
 
+  const awaitingVerdict = isAwaitingFirstVerdict(debateQuery.data?.currentStage ?? "NONE", historiesQuery.data);
+
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       if (messageViewport.current && shouldStickToLatestMessage.current) {
@@ -293,9 +325,11 @@ export function DebateRoom({ debateId }: { debateId: string }) {
       }
     });
     return () => cancelAnimationFrame(frame);
-  }, [historiesQuery.data?.length, scheduledContent]);
+  }, [historiesQuery.data?.histories.length, historiesQuery.data?.verdicts.length, awaitingVerdict, scheduledContent]);
 
   const shouldFocusStatement = debateQuery.data?.status === "IN_PROGRESS"
+    && canSubmitOpening(debateQuery.data.currentStage, historiesQuery.data)
+    && !awaitingVerdict
     && speakingPosition(debateQuery.data?.currentStage ?? "NONE") === memberQuery.data?.myPosition;
 
   useEffect(() => {
@@ -330,7 +364,7 @@ export function DebateRoom({ debateId }: { debateId: string }) {
   const debate = debateQuery.data;
   const member = memberQuery.data;
   const myPosition = member?.myPosition;
-  const currentSpeaker = speakingPosition(debate.currentStage);
+  const currentSpeaker = canSubmitOpening(debate.currentStage, historiesQuery.data) && !awaitingVerdict ? speakingPosition(debate.currentStage) : null;
   const started = presence.started || debate.status === "IN_PROGRESS";
   const isMyTurn = started && Boolean(currentSpeaker && currentSpeaker === myPosition);
   const canCompose = started && Boolean(member && currentSpeaker) && !scheduledContent;
@@ -342,7 +376,9 @@ export function DebateRoom({ debateId }: { debateId: string }) {
   const opponentName = member?.opponent?.nickname ?? "상대방";
   const myProfileImageUrl = profileQuery.data?.profileImageUrl ?? null;
   const opponentProfileImageUrl = opponentImageQuery.data?.url ?? null;
-  const histories = historiesQuery.data;
+  const histories = historiesQuery.data?.histories;
+  const verdicts = historiesQuery.data?.verdicts;
+  const firstVerdict = verdicts?.find((verdict) => verdict.stage === "VERDICT_1");
   const hostProfileImageUrl = member?.myRole === "HOST" ? myProfileImageUrl : opponentProfileImageUrl;
   const guestProfileImageUrl = member?.myRole === "GUEST" ? myProfileImageUrl : opponentProfileImageUrl;
   const turnStatusLabel = !member
@@ -351,13 +387,15 @@ export function DebateRoom({ debateId }: { debateId: string }) {
       ? "내 차례"
       : currentSpeaker
         ? "상대방 차례"
-        : "판정 대기";
+        : awaitingVerdict ? "AI 판결 중" : firstVerdict ? "1차 판결 완료" : "입장 대기";
   const inputPlaceholder = !started
     ? "토론 시작을 기다리고 있습니다."
     : !member
       ? "내 진영 정보를 확인하고 있습니다."
+      : awaitingVerdict
+        ? "AI가 양측 발언을 검토하고 있습니다."
       : currentSpeaker === null
-        ? "다음 토론 단계를 기다리고 있습니다."
+        ? firstVerdict ? "반론 제출 기능은 준비 중입니다." : "다음 토론 단계를 기다리고 있습니다."
         : scheduledContent
           ? "예약한 발언을 취소하면 다시 입력할 수 있습니다."
         : isMyTurn
@@ -367,7 +405,7 @@ export function DebateRoom({ debateId }: { debateId: string }) {
   const submitStatement = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const statement = content.trim();
-    if (!statement || submitMutation.isPending) return;
+    if (!canCompose || !statement || submitMutation.isPending) return;
     setSubmitError("");
     shouldStickToLatestMessage.current = true;
     if (!isMyTurn) {
@@ -471,7 +509,7 @@ export function DebateRoom({ debateId }: { debateId: string }) {
             <div className="flex items-center justify-between border-b border-[var(--line)] px-5 py-4">
               <div>
                 <h2 className="font-bold text-[var(--ink)]">토론 발언</h2>
-                <p className="mt-1 text-xs text-[var(--ink-muted)]">제출한 발언은 수정할 수 없습니다.</p>
+                <p className="mt-1 text-xs text-[var(--ink-muted)]">양측이 한 번씩 입론을 제출하면 AI가 자동으로 판결합니다.</p>
               </div>
               <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isMyTurn ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600"}`}>
                 {turnStatusLabel}
@@ -491,14 +529,14 @@ export function DebateRoom({ debateId }: { debateId: string }) {
                   <div className="h-20 w-4/5 rounded-2xl bg-slate-100" />
                   <div className="ml-auto h-20 w-4/5 rounded-2xl bg-slate-200" />
                 </div>
-              ) : historiesQuery.isError ? (
+              ) : historiesQuery.isError && !historiesQuery.data ? (
                 <div className="py-12 text-center" role="alert">
-                  <p className="text-sm text-[var(--danger)]">발언 내역을 불러오지 못했습니다.</p>
+                  <p className="text-sm text-[var(--danger)]">{historiesQuery.error instanceof Error ? historiesQuery.error.message : "발언과 판결을 불러오지 못했습니다."}</p>
                   <button className="mt-3 text-sm font-semibold text-[var(--brand-blue)] underline" type="button" onClick={() => historiesQuery.refetch()}>
                     다시 시도
                   </button>
                 </div>
-              ) : histories?.length || scheduledContent ? (
+              ) : histories?.length || verdicts?.length || scheduledContent ? (
                 <ol className="space-y-5">
                   {histories?.map((history) => (
                     <HistoryItem
@@ -509,6 +547,11 @@ export function DebateRoom({ debateId }: { debateId: string }) {
                       opponentName={opponentName}
                       opponentProfileImageUrl={opponentProfileImageUrl}
                     />
+                  ))}
+                  {verdicts?.map((verdict) => (
+                    <li key={`verdict-${verdict.id}`}>
+                      <DebateVerdictCard verdict={verdict} />
+                    </li>
                   ))}
                   {scheduledContent ? (
                     <li className="flex justify-end">
@@ -540,6 +583,22 @@ export function DebateRoom({ debateId }: { debateId: string }) {
                   {started ? "첫 발언을 기다리고 있습니다." : "두 참여자가 입장하면 토론이 시작됩니다."}
                 </p>
               )}
+              {awaitingVerdict ? (
+                <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-5" role="status" aria-live="polite">
+                  <p className="font-bold text-[var(--ink)]">AI가 양측 발언을 검토하고 있습니다</p>
+                  <p className="mt-2 text-sm text-[var(--ink-muted)]">판결이 완료되면 우세 진영과 근거가 여기에 표시됩니다. 잠시 기다려 주세요.</p>
+                  <button className="mt-3 text-sm font-semibold text-[var(--brand-blue)] underline disabled:opacity-50" type="button" disabled={historiesQuery.isFetching} onClick={() => void Promise.all([refetchDebate(), refetchHistories()])}>
+                    {historiesQuery.isFetching ? "결과 확인 중…" : "결과 다시 확인"}
+                  </button>
+                </div>
+              ) : null}
+              {historiesQuery.isError && historiesQuery.data ? (
+                <div className="mt-4 text-sm text-[var(--danger)]" role="alert">
+                  <p>{historiesQuery.error instanceof Error ? historiesQuery.error.message : "최신 발언과 판결을 불러오지 못했습니다."}</p>
+                  <button className="mt-2 underline" type="button" onClick={() => void Promise.all([refetchDebate(), refetchHistories()])}>다시 조회</button>
+                </div>
+              ) : null}
+              {firstVerdict ? <p className="mt-4 text-xs text-[var(--ink-muted)]">1차 판결 처리가 끝났습니다. 다음 반론 제출 기능은 준비 중입니다.</p> : null}
             </div>
 
             <form className="border-t border-[var(--line)] p-4 sm:p-5" onSubmit={submitStatement}>

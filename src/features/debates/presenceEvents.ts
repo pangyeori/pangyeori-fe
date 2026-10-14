@@ -1,4 +1,4 @@
-import type { DebateHistory, DebateRole, DebateStage } from "@/features/debates/api/debates";
+import type { DebateHistories, DebateHistory, DebateRole, DebateStage, DebateVerdictStatus, WinnerPosition } from "@/features/debates/api/debates";
 
 const debateStages: DebateStage[] = [
   "NONE",
@@ -18,7 +18,8 @@ export type DebateConnectionEventType =
   | "STARTED"
   | "STAGE_CHANGED"
   | "STATEMENT_SUBMITTED"
-  | "STATEMENT_TIMED_OUT";
+  | "STATEMENT_TIMED_OUT"
+  | "VERDICT_ISSUED";
 
 export type DebateConnectionEvent = {
   debateId: string;
@@ -28,6 +29,9 @@ export type DebateConnectionEvent = {
   content?: string | null;
   turnEndsAt?: string | null;
   submittedAt?: string | null;
+  verdictStatus?: DebateVerdictStatus | null;
+  winnerPosition?: WinnerPosition | null;
+  reasoning?: string | null;
 };
 
 export type PresenceStatus = "unknown" | "entered" | "reconnecting" | "left";
@@ -59,11 +63,20 @@ export function parseDebateConnectionEvent(raw: string, debateId: string): Debat
       "STAGE_CHANGED",
       "STATEMENT_SUBMITTED",
       "STATEMENT_TIMED_OUT",
+      "VERDICT_ISSUED",
     ].includes(type)) return null;
     if (["ENTERED", "LEFT", "STATEMENT_SUBMITTED", "STATEMENT_TIMED_OUT"].includes(type)
       && value.role !== "HOST" && value.role !== "GUEST") return null;
-    if (["STAGE_CHANGED", "STATEMENT_SUBMITTED", "STATEMENT_TIMED_OUT"].includes(type)
+    if (["STAGE_CHANGED", "STATEMENT_SUBMITTED", "STATEMENT_TIMED_OUT", "VERDICT_ISSUED"].includes(type)
       && !debateStages.includes(value.stage as DebateStage)) return null;
+    if (type === "VERDICT_ISSUED") {
+      if (!["VERDICT_1", "VERDICT_2", "FINAL_VERDICT"].includes(String(value.stage))) return null;
+      if (value.verdictStatus !== "SUCCESS" && value.verdictStatus !== "FAILED") return null;
+      if (value.verdictStatus === "SUCCESS"
+        && (!["PROS", "CONS", "DRAW"].includes(String(value.winnerPosition)) || typeof value.reasoning !== "string")) return null;
+      if (value.verdictStatus === "FAILED"
+        && (value.winnerPosition != null || value.reasoning != null)) return null;
+    }
     if (type === "STATEMENT_SUBMITTED" && typeof value.content !== "string") return null;
     if (["STATEMENT_SUBMITTED", "STATEMENT_TIMED_OUT"].includes(type)
       && (typeof value.submittedAt !== "string" || !Number.isFinite(Date.parse(value.submittedAt)))) return null;
@@ -99,7 +112,17 @@ export function applyDebateConnectionEvent(
 export function isDebateProgressEvent(event: DebateConnectionEvent) {
   return event.type === "STAGE_CHANGED"
     || event.type === "STATEMENT_SUBMITTED"
-    || event.type === "STATEMENT_TIMED_OUT";
+    || event.type === "STATEMENT_TIMED_OUT"
+    || event.type === "VERDICT_ISSUED";
+}
+
+export function mergeDebateHistoriesEvent(
+  data: DebateHistories | undefined,
+  event: DebateConnectionEvent,
+): DebateHistories | undefined {
+  const histories = mergeDebateHistoryEvent(data?.histories, event);
+  if (!histories || histories === data?.histories) return data;
+  return { histories, verdicts: data?.verdicts ?? [] };
 }
 
 export function mergeDebateHistoryEvent(
