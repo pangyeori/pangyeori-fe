@@ -113,7 +113,7 @@ try {
   data.histories.push({ id: "opening-cons", stage: "OPENING_CONS", content: "상대의 반대 입론", createdAt: new Date().toISOString() });
   debate.currentStage = "VERDICT_1";
   debate.turnEndsAt = null;
-  await until("document.body.innerText.includes('AI가 양측 발언을 검토하고 있습니다')");
+  await until("document.body.innerText.includes('1차 판정을 정리하고 있습니다')");
   assert.equal(await evaluate("document.querySelector('#debate-statement').disabled"), true);
   historyError = true;
   await until("document.body.innerText.includes('테스트 서버 오류 원문')");
