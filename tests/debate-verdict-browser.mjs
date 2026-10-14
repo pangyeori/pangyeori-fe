@@ -115,7 +115,13 @@ try {
   debate.turnEndsAt = null;
   await until("document.body.innerText.includes('1차 판정을 정리하고 있습니다')");
   assert.equal(await evaluate("document.querySelector('#debate-statement').disabled"), true);
+  const readsWhilePending = historyGets;
+  await pause(3500);
+  assert.equal(historyGets, readsWhilePending, "pending verdict does not poll histories");
+  await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent === '결과 다시 확인').click()");
+  await until("document.body.innerText.includes('상대의 반대 입론')");
   historyError = true;
+  await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent === '결과 다시 확인').click()");
   await until("document.body.innerText.includes('테스트 서버 오류 원문')");
   assert.equal(await evaluate("document.body.innerText.includes('상대의 반대 입론')"), true);
   historyError = false;
@@ -123,7 +129,7 @@ try {
   debate.currentStage = "REBUTTAL_PROS";
   await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent === '다시 조회').click()");
   await until("document.body.innerText.includes('찬성 측 우세')");
-  assert.equal(await evaluate("document.querySelector('#debate-statement').disabled"), true);
+  assert.equal(await evaluate("document.querySelector('#debate-statement').disabled"), false);
   const readsAfterResult = historyGets;
   await pause(3500);
   assert.equal(historyGets, readsAfterResult, "polling stops when verdict is stored");
