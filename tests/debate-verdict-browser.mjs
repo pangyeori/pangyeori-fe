@@ -45,7 +45,6 @@ try {
   const data = { histories: [], verdicts: [] };
   let submits = 0;
   let historyGets = 0;
-  let historyError = false;
   ws.addEventListener("message", ({ data: raw }) => {
     const message = JSON.parse(raw);
     if (pending.has(message.id)) {
@@ -74,7 +73,6 @@ try {
         debate.currentStage = "OPENING_CONS";
       } else {
         historyGets++;
-        status = historyError ? 503 : 200;
         result = data;
       }
     } else { status = 404; errors.push(`Unexpected API: ${path}`); }
@@ -118,16 +116,10 @@ try {
   const readsWhilePending = historyGets;
   await pause(3500);
   assert.equal(historyGets, readsWhilePending, "pending verdict does not poll histories");
-  await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent === '결과 다시 확인').click()");
-  await until("document.body.innerText.includes('상대의 반대 입론')");
-  historyError = true;
-  await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent === '결과 다시 확인').click()");
-  await until("document.body.innerText.includes('테스트 서버 오류 원문')");
-  assert.equal(await evaluate("document.body.innerText.includes('상대의 반대 입론')"), true);
-  historyError = false;
+  assert.equal(await evaluate("document.body.innerText.includes('결과 다시 확인')"), false, "retry stays hidden during the first five minutes");
   data.verdicts.push({ id: "verdict-1", stage: "VERDICT_1", status: "SUCCESS", winnerPosition: "PROS", reasoning: "찬성 측이 구체적인 근거를 제시했습니다.", createdAt: new Date().toISOString() });
   debate.currentStage = "REBUTTAL_PROS";
-  await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent === '다시 조회').click()");
+  await call("Page.reload");
   await until("document.body.innerText.includes('찬성 측 우세')");
   assert.equal(await evaluate("document.querySelector('#debate-statement').disabled"), false);
   const readsAfterResult = historyGets;

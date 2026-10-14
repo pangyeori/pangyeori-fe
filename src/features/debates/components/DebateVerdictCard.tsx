@@ -7,12 +7,20 @@ import type { DebateStage, DebateVerdict } from "@/features/debates/api/debates"
 import { debateStageLabels } from "@/features/debates/debateProgress";
 
 const resultLabels = { PROS: "찬성 측 우세", CONS: "반대 측 우세", DRAW: "무승부" };
+const VERDICT_RETRY_DELAY_MS = 5 * 60 * 1000;
 
 export function DebateVerdictPendingCard({ stage, isFetching, onRetry }: {
   stage: DebateStage;
   isFetching: boolean;
   onRetry: () => void;
 }) {
+  const [canRetry, setCanRetry] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setCanRetry(true), VERDICT_RETRY_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   return (
     <article className="rounded-2xl border border-[var(--line)] bg-[var(--surface-muted)] p-4 sm:p-5" role="status" aria-live="polite">
       <div className="flex items-center gap-3">
@@ -24,9 +32,11 @@ export function DebateVerdictPendingCard({ stage, isFetching, onRetry }: {
           <p className="mt-1 font-bold text-[var(--ink)] motion-safe:animate-pulse">{debateStageLabels[stage]}을 정리하고 있습니다...</p>
         </div>
       </div>
-      <button className="mt-3 text-xs font-semibold text-[var(--brand-blue)] underline disabled:opacity-50" type="button" disabled={isFetching} onClick={onRetry}>
-        {isFetching ? "결과 확인 중…" : "결과 다시 확인"}
-      </button>
+      {canRetry ? (
+        <button className="mt-3 text-xs font-semibold text-[var(--brand-blue)] underline disabled:opacity-50" type="button" disabled={isFetching} onClick={onRetry}>
+          {isFetching ? "결과 확인 중…" : "결과 다시 확인"}
+        </button>
+      ) : null}
     </article>
   );
 }
