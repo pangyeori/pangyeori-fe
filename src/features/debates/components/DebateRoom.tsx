@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { Fragment, type FormEvent, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { SiteHeader } from "@/components/layout/SiteHeader";
@@ -13,14 +13,16 @@ import {
   getDebateHistories,
   getMyDebate,
   submitDebateHistory,
+  debateStages,
   type DebateDetail,
   type DebateHistories,
   type DebateHistory,
   type DebateRole,
+  type DebateStage,
   type Position,
 } from "@/features/debates/api/debates";
 import { DebateRoomSkeleton } from "@/features/debates/components/DebateRoomSkeleton";
-import { DebateVerdictCard } from "@/features/debates/components/DebateVerdictCard";
+import { DebateVerdictCard, DebateVerdictPendingCard } from "@/features/debates/components/DebateVerdictCard";
 import { DebateTimeBadges, formatDebateTime } from "@/features/debates/components/DebateTimeBadges";
 import {
   debateStageLabels,
@@ -32,7 +34,7 @@ import {
 } from "@/features/debates/debateProgress";
 import { useDebatePresence } from "@/features/debates/hooks/useDebatePresence";
 import { mergeDebateHistoriesEvent, resolvePresenceStatus, type PresenceStatus } from "@/features/debates/presenceEvents";
-import { canSubmitOpening, isAwaitingFirstVerdict } from "@/features/debates/debateVerdict";
+import { awaitingVerdictStage, canSubmitStatement } from "@/features/debates/debateVerdict";
 import { getProfileImageViewUrl } from "@/features/mypage/api/getMyProfile";
 import { ProfileAvatar } from "@/features/mypage/components/ProfileAvatar";
 import { useMyProfile } from "@/features/mypage/hooks/useMyProfile";
@@ -96,6 +98,18 @@ function HostMark() {
         <path d="m3 5 3.2 3L10 3l3.8 5L17 5l-1.2 9H4.2L3 5Zm1.5 11h11v1.5h-11V16Z" />
       </svg>
     </span>
+  );
+}
+
+function StageNotice({ stage }: { stage: DebateStage }) {
+  return (
+    <li className="flex items-center gap-3 py-2" role="status">
+      <span className="h-px flex-1 bg-slate-100" aria-hidden />
+      <p className="shrink-0 rounded-full bg-slate-100 px-4 py-2 text-center text-xs font-medium text-slate-500 sm:text-sm">
+        {stage === "FREE" ? "자유 토론이 시작되었습니다." : `${debateStageLabels[stage]} 단계가 시작되었습니다.`}
+      </p>
+      <span className="h-px flex-1 bg-slate-100" aria-hidden />
+    </li>
   );
 }
 
@@ -197,9 +211,8 @@ export function DebateRoom({ debateId }: { debateId: string }) {
       const debate = query.state.data;
       if (debate?.status === "READY") return 1000;
       return debate?.status === "IN_PROGRESS"
-        && (debate.currentStage === "OPENING_PROS"
-          || debate.currentStage === "OPENING_CONS"
-          || debate.currentStage === "VERDICT_1") ? 3000 : false;
+        && debate.currentStage !== "FREE"
+        && debate.currentStage !== "FINAL_VERDICT" ? 3000 : false;
     },
   });
   const entryAllowed = debateQuery.data?.status === "READY" || debateQuery.data?.status === "IN_PROGRESS";
@@ -211,7 +224,7 @@ export function DebateRoom({ debateId }: { debateId: string }) {
     // Recover a missed verdict event without submitting another statement or AI request.
     refetchInterval: (query) => debateQuery.data?.status === "IN_PROGRESS"
       && query.state.status !== "error"
-      && !query.state.data?.verdicts.some((verdict) => verdict.stage === "VERDICT_1") ? 3000 : false,
+      && awaitingVerdictStage(debateQuery.data.currentStage, query.state.data) ? 3000 : false,
   });
   const memberQuery = useQuery({
     queryKey: ["debates", debateId, "member", accessToken],
@@ -316,7 +329,8 @@ export function DebateRoom({ debateId }: { debateId: string }) {
     return () => window.removeEventListener("scroll", updateFloatingProgress);
   }, [entryAllowed]);
 
-  const awaitingVerdict = isAwaitingFirstVerdict(debateQuery.data?.currentStage ?? "NONE", historiesQuery.data);
+  const pendingVerdictStage = awaitingVerdictStage(debateQuery.data?.currentStage ?? "NONE", historiesQuery.data);
+  const awaitingVerdict = Boolean(pendingVerdictStage);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
@@ -325,10 +339,10 @@ export function DebateRoom({ debateId }: { debateId: string }) {
       }
     });
     return () => cancelAnimationFrame(frame);
-  }, [historiesQuery.data?.histories.length, historiesQuery.data?.verdicts.length, awaitingVerdict, scheduledContent]);
+  }, [debateQuery.data?.currentStage, historiesQuery.data?.histories.length, historiesQuery.data?.verdicts.length, awaitingVerdict, scheduledContent]);
 
   const shouldFocusStatement = debateQuery.data?.status === "IN_PROGRESS"
-    && canSubmitOpening(debateQuery.data.currentStage, historiesQuery.data)
+    && canSubmitStatement(debateQuery.data.currentStage, historiesQuery.data)
     && !awaitingVerdict
     && speakingPosition(debateQuery.data?.currentStage ?? "NONE") === memberQuery.data?.myPosition;
 
@@ -364,7 +378,7 @@ export function DebateRoom({ debateId }: { debateId: string }) {
   const debate = debateQuery.data;
   const member = memberQuery.data;
   const myPosition = member?.myPosition;
-  const currentSpeaker = canSubmitOpening(debate.currentStage, historiesQuery.data) && !awaitingVerdict ? speakingPosition(debate.currentStage) : null;
+  const currentSpeaker = canSubmitStatement(debate.currentStage, historiesQuery.data) && !awaitingVerdict ? speakingPosition(debate.currentStage) : null;
   const started = presence.started || debate.status === "IN_PROGRESS";
   const isMyTurn = started && Boolean(currentSpeaker && currentSpeaker === myPosition);
   const canCompose = started && Boolean(member && currentSpeaker) && !scheduledContent;
@@ -378,7 +392,9 @@ export function DebateRoom({ debateId }: { debateId: string }) {
   const opponentProfileImageUrl = opponentImageQuery.data?.url ?? null;
   const histories = historiesQuery.data?.histories;
   const verdicts = historiesQuery.data?.verdicts;
-  const firstVerdict = verdicts?.find((verdict) => verdict.stage === "VERDICT_1");
+  const currentVerdict = verdicts?.find((verdict) => verdict.stage === debate.currentStage);
+  const currentStageIndex = debateStages.indexOf(debate.currentStage);
+  const timelineStages = currentStageIndex > 0 ? debateStages.slice(1, currentStageIndex + 1) : [];
   const hostProfileImageUrl = member?.myRole === "HOST" ? myProfileImageUrl : opponentProfileImageUrl;
   const guestProfileImageUrl = member?.myRole === "GUEST" ? myProfileImageUrl : opponentProfileImageUrl;
   const turnStatusLabel = !member
@@ -387,7 +403,7 @@ export function DebateRoom({ debateId }: { debateId: string }) {
       ? "내 차례"
       : currentSpeaker
         ? "상대방 차례"
-        : awaitingVerdict ? "AI 판결 중" : firstVerdict ? "1차 판결 완료" : "입장 대기";
+        : awaitingVerdict ? "AI 판결 중" : currentVerdict ? "AI 판결 완료" : "다음 단계 대기";
   const inputPlaceholder = !started
     ? "토론 시작을 기다리고 있습니다."
     : !member
@@ -395,11 +411,11 @@ export function DebateRoom({ debateId }: { debateId: string }) {
       : awaitingVerdict
         ? "AI가 양측 발언을 검토하고 있습니다."
       : currentSpeaker === null
-        ? firstVerdict ? "반론 제출 기능은 준비 중입니다." : "다음 토론 단계를 기다리고 있습니다."
+        ? "다음 토론 단계를 기다리고 있습니다."
         : scheduledContent
           ? "예약한 발언을 취소하면 다시 입력할 수 있습니다."
         : isMyTurn
-          ? `${positionLabel(currentSpeaker)} 측 입론을 입력하세요.`
+          ? `${debateStageLabels[debate.currentStage]} 내용을 입력하세요.`
           : "내 차례에 보낼 발언을 미리 입력하세요.";
 
   const submitStatement = (event: FormEvent<HTMLFormElement>) => {
@@ -509,7 +525,7 @@ export function DebateRoom({ debateId }: { debateId: string }) {
             <div className="flex items-center justify-between border-b border-[var(--line)] px-5 py-4">
               <div>
                 <h2 className="font-bold text-[var(--ink)]">토론 발언</h2>
-                <p className="mt-1 text-xs text-[var(--ink-muted)]">양측이 한 번씩 입론을 제출하면 AI가 자동으로 판결합니다.</p>
+                <p className="mt-1 text-xs text-[var(--ink-muted)]">단계에 따라 발언과 AI 판결이 실시간으로 표시됩니다.</p>
               </div>
               <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isMyTurn ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600"}`}>
                 {turnStatusLabel}
@@ -518,7 +534,7 @@ export function DebateRoom({ debateId }: { debateId: string }) {
 
             <div
               ref={messageViewport}
-              className="min-h-56 max-h-[60vh] overflow-y-auto overscroll-contain p-4 sm:min-h-72 sm:p-5 lg:max-h-[640px]"
+              className="min-h-56 max-h-[60vh] overflow-y-auto overscroll-y-auto p-4 sm:min-h-72 sm:p-5 lg:max-h-[640px]"
               onScroll={(event) => {
                 const element = event.currentTarget;
                 shouldStickToLatestMessage.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
@@ -536,22 +552,36 @@ export function DebateRoom({ debateId }: { debateId: string }) {
                     다시 시도
                   </button>
                 </div>
-              ) : histories?.length || verdicts?.length || scheduledContent ? (
+              ) : timelineStages.length || histories?.length || verdicts?.length || scheduledContent ? (
                 <ol className="space-y-5">
-                  {histories?.map((history) => (
-                    <HistoryItem
-                      key={history.id}
-                      history={history}
-                      hostPosition={debate.hostPosition}
-                      myPosition={myPosition}
-                      opponentName={opponentName}
-                      opponentProfileImageUrl={opponentProfileImageUrl}
-                    />
-                  ))}
-                  {verdicts?.map((verdict) => (
-                    <li key={`verdict-${verdict.id}`}>
-                      <DebateVerdictCard verdict={verdict} />
-                    </li>
+                  {timelineStages.map((stage) => (
+                    <Fragment key={stage}>
+                      <StageNotice stage={stage} />
+                      {histories?.filter((history) => history.stage === stage).map((history) => (
+                        <HistoryItem
+                          key={history.id}
+                          history={history}
+                          hostPosition={debate.hostPosition}
+                          myPosition={myPosition}
+                          opponentName={opponentName}
+                          opponentProfileImageUrl={opponentProfileImageUrl}
+                        />
+                      ))}
+                      {verdicts?.filter((verdict) => verdict.stage === stage).map((verdict) => (
+                        <li key={`verdict-${verdict.id}`}>
+                          <DebateVerdictCard key={verdict.id} verdict={verdict} />
+                        </li>
+                      ))}
+                      {pendingVerdictStage === stage && !verdicts?.some((verdict) => verdict.stage === stage) ? (
+                        <li>
+                          <DebateVerdictPendingCard
+                            stage={stage}
+                            isFetching={historiesQuery.isFetching}
+                            onRetry={() => void Promise.all([refetchDebate(), refetchHistories()])}
+                          />
+                        </li>
+                      ) : null}
+                    </Fragment>
                   ))}
                   {scheduledContent ? (
                     <li className="flex justify-end">
@@ -583,22 +613,12 @@ export function DebateRoom({ debateId }: { debateId: string }) {
                   {started ? "첫 발언을 기다리고 있습니다." : "두 참여자가 입장하면 토론이 시작됩니다."}
                 </p>
               )}
-              {awaitingVerdict ? (
-                <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-5" role="status" aria-live="polite">
-                  <p className="font-bold text-[var(--ink)]">AI가 양측 발언을 검토하고 있습니다</p>
-                  <p className="mt-2 text-sm text-[var(--ink-muted)]">판결이 완료되면 우세 진영과 근거가 여기에 표시됩니다. 잠시 기다려 주세요.</p>
-                  <button className="mt-3 text-sm font-semibold text-[var(--brand-blue)] underline disabled:opacity-50" type="button" disabled={historiesQuery.isFetching} onClick={() => void Promise.all([refetchDebate(), refetchHistories()])}>
-                    {historiesQuery.isFetching ? "결과 확인 중…" : "결과 다시 확인"}
-                  </button>
-                </div>
-              ) : null}
               {historiesQuery.isError && historiesQuery.data ? (
                 <div className="mt-4 text-sm text-[var(--danger)]" role="alert">
                   <p>{historiesQuery.error instanceof Error ? historiesQuery.error.message : "최신 발언과 판결을 불러오지 못했습니다."}</p>
                   <button className="mt-2 underline" type="button" onClick={() => void Promise.all([refetchDebate(), refetchHistories()])}>다시 조회</button>
                 </div>
               ) : null}
-              {firstVerdict ? <p className="mt-4 text-xs text-[var(--ink-muted)]">1차 판결 처리가 끝났습니다. 다음 반론 제출 기능은 준비 중입니다.</p> : null}
             </div>
 
             <form className="border-t border-[var(--line)] p-4 sm:p-5" onSubmit={submitStatement}>
