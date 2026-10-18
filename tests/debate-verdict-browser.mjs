@@ -62,6 +62,7 @@ try {
     if (path === "/api/v1/auth/refresh") result = { accessToken: "test-session", tokenType: "Bearer" };
     else if (path === "/api/v1/users/me/term-agreements/pending") result = [];
     else if (path === "/api/v1/debates/verdict-test") result = debate;
+    else if (path === "/api/v1/debates/verdict-test/free-messages") result = { items: [], hasNext: false, nextCursor: null };
     else if (path === "/api/v1/debates/me") result = { items: [{ ...debate, debateId: debate.id, myRole: "HOST", myPosition: "PROS", opponent: { userId: "guest", nickname: "상대", profileImageKey: null } }], hasNext: false, nextCursor: null };
     else if (path === "/api/v1/users/me") result = { id: "host", nickname: "테스터", email: "test@example.invalid", profileImageKey: null };
     else if (path === "/api/v1/notifications/unread-count") result = { count: 0 };
@@ -91,7 +92,7 @@ try {
     window.WebSocket = class extends EventTarget {
       constructor(url, protocols) {
         super();
-        if (!String(url).includes('api.pangyeori.com')) return new NativeWebSocket(url, protocols);
+        if (new URL(String(url)).pathname !== '/ws') return new NativeWebSocket(url, protocols);
         this.readyState = 0;
       }
       send() {}
@@ -139,7 +140,7 @@ try {
   await call("Page.reload");
   await until("document.querySelector('[aria-current=step]')?.textContent.includes('자유 토론')");
   await until("document.querySelector('#debate-statement')?.disabled");
-  assert.equal(await evaluate("document.querySelector('#debate-statement').placeholder"), "자유 토론 메시지 연결을 준비하고 있습니다.");
+  assert.equal(await evaluate("document.querySelector('#debate-statement').placeholder"), "채팅 연결 중입니다. 잠시 기다려주세요.");
   assert.equal(submits, 1, "free debate never uses the statement API");
   await pause(4500);
   assert.equal(await evaluate("document.querySelector('#debate-statement').disabled"), true);

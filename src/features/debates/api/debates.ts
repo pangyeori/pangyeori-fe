@@ -121,6 +121,25 @@ export type DebateHistories = {
   verdicts: DebateVerdict[];
 };
 
+export type DebateFreeMessage = {
+  id: string;
+  role: DebateRole;
+  content: string;
+  createdAt: string;
+};
+
+export type DebateFreeMessagesPage = {
+  items: DebateFreeMessage[];
+  nextCursor: string | null;
+  hasNext: boolean;
+};
+
+export function getDebateFreeMessages(debateId: string, token: string, cursor: string | null = null) {
+  const query = new URLSearchParams({ pageSize: "50" });
+  if (cursor) query.set("cursor", cursor);
+  return apiClient<DebateFreeMessagesPage>(`/api/v1/debates/${encodeURIComponent(debateId)}/free-messages?${query}`, { token });
+}
+
 export type MyDebatesPage = {
   items: MyDebate[];
   nextCursor: string | null;
