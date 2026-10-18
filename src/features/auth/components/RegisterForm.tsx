@@ -28,9 +28,15 @@ import {
   type RegisterFormValues,
 } from "@/features/auth/schemas/registerSchema";
 import { ApiError } from "@/lib/api/client";
+import { useLatestTerms } from "@/features/terms/useLatestTerms";
+import { canAgreeToTerms, needsTermsRefresh, selectedTermsIds } from "@/features/terms/terms";
+import { TermsQueryStatus } from "@/features/terms/components/TermsQueryStatus";
 
 export function RegisterForm() {
   const registerMutation = useRegister();
+  const termsQuery = useLatestTerms();
+  const terms = termsQuery.data ?? [];
+  const [termsNotice, setTermsNotice] = useState("");
   const [checkingNickname, setCheckingNickname] = useState(false);
   const [nicknameSuccess, setNicknameSuccess] = useState<string | null>(null);
   const [nicknameCheckAttempted, setNicknameCheckAttempted] = useState(false);
@@ -45,9 +51,7 @@ export function RegisterForm() {
       email: "",
       password: "",
       passwordConfirm: "",
-      agreeService: false,
-      agreePrivacy: false,
-      agreeMarketing: false,
+      agreedTermsIds: [],
       emailVerified: false,
     },
   });
@@ -73,9 +77,7 @@ export function RegisterForm() {
     password,
     passwordConfirm,
     emailVerified,
-    agreeService,
-    agreePrivacy,
-    agreeMarketing,
+    agreedTermsIds,
   ] = useWatch({
     control: form.control,
     name: [
@@ -85,9 +87,7 @@ export function RegisterForm() {
       "password",
       "passwordConfirm",
       "emailVerified",
-      "agreeService",
-      "agreePrivacy",
-      "agreeMarketing",
+      "agreedTermsIds",
     ],
   });
 
@@ -217,11 +217,24 @@ export function RegisterForm() {
       aria-busy={registerMutation.isPending}
       onSubmit={handleSubmit(
         (formValues) => {
+          if (!termsQuery.isSuccess || termsQuery.isFetching || !canAgreeToTerms(terms, formValues.agreedTermsIds)) {
+            setError("agreedTermsIds", { message: "최신 필수 약관을 확인하고 동의해주세요." });
+            return;
+          }
           registerMutation.reset();
           registerMutation.mutate({
             nickname: formValues.nickname,
             email: formValues.email,
             password: formValues.password,
+            agreedTermsIds: selectedTermsIds(terms, formValues.agreedTermsIds),
+          }, {
+            onError: async (error) => {
+              if (error instanceof ApiError && needsTermsRefresh(error.code)) {
+                setValue("agreedTermsIds", []);
+                setTermsNotice("약관 목록을 다시 확인합니다. 최신 내용을 읽고 다시 동의해주세요.");
+                await termsQuery.refetch();
+              }
+            },
           });
         },
         handleInvalid,
@@ -359,27 +372,19 @@ export function RegisterForm() {
         ref={passwordConfirmRef}
       />
 
-      <TermsAgreement
-        value={{
-          service: agreeService,
-          privacy: agreePrivacy,
-          marketing: agreeMarketing,
-        }}
-        onChange={(next) => {
-          setValue("agreeService", next.service, {
-            shouldValidate: isSubmitted,
-          });
-          setValue("agreePrivacy", next.privacy, {
-            shouldValidate: isSubmitted,
-          });
-          setValue("agreeMarketing", next.marketing, {
-            shouldValidate: isSubmitted,
-          });
-        }}
-        error={
-          isSubmitted ? errors.agreeService?.message : undefined
-        }
+      {termsNotice ? <p role="status" className="text-sm">{termsNotice}</p> : null}
+      <TermsQueryStatus pending={termsQuery.isPending} error={termsQuery.error} empty={terms.length === 0}
+        fetching={termsQuery.isFetching} onRetry={() => { void termsQuery.refetch(); }}
       />
+      {termsQuery.isSuccess && terms.length > 0 ? (
+        <TermsAgreement terms={terms} value={agreedTermsIds} disabled={termsQuery.isFetching}
+          onChange={(next) => {
+            setValue("agreedTermsIds", next, { shouldDirty: true });
+            clearErrors("agreedTermsIds");
+          }}
+          error={isSubmitted ? errors.agreedTermsIds?.message : undefined}
+        />
+      ) : null}
       </fieldset>
 
       {serverError ? <FormAlert>{serverError}</FormAlert> : null}
@@ -392,7 +397,7 @@ export function RegisterForm() {
 
       <Button
         type="submit"
-        disabled={!agreeService || !agreePrivacy}
+        disabled={!termsQuery.isSuccess || termsQuery.isFetching || !canAgreeToTerms(terms, agreedTermsIds)}
         loading={registerMutation.isPending}
       >
         회원가입

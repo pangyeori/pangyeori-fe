@@ -64,10 +64,6 @@ function extractErrorMessage(body: unknown, fallback: string) {
 
   if (record.error && typeof record.error === "object") {
     const error = record.error as BackendApiError;
-    const detailMessage = error.details?.find(
-      (item) => typeof item.message === "string" && item.message.trim(),
-    )?.message;
-    if (detailMessage) return detailMessage;
     if (typeof error.message === "string" && error.message.trim()) {
       return error.message;
     }

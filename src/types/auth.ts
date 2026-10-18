@@ -12,4 +12,5 @@ export type RegisterRequest = {
   nickname: string;
   email: string;
   password: string;
+  agreedTermsIds: string[];
 };

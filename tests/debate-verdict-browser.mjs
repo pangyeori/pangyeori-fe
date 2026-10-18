@@ -60,6 +60,7 @@ try {
     let result;
     let status = 200;
     if (path === "/api/v1/auth/refresh") result = { accessToken: "test-session", tokenType: "Bearer" };
+    else if (path === "/api/v1/users/me/term-agreements/pending") result = [];
     else if (path === "/api/v1/debates/verdict-test") result = debate;
     else if (path === "/api/v1/debates/me") result = { items: [{ ...debate, debateId: debate.id, myRole: "HOST", myPosition: "PROS", opponent: { userId: "guest", nickname: "상대", profileImageKey: null } }], hasNext: false, nextCursor: null };
     else if (path === "/api/v1/users/me") result = { id: "host", nickname: "테스터", email: "test@example.invalid", profileImageKey: null };
