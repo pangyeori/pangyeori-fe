@@ -10,7 +10,7 @@ export function useMyProfile() {
   const { accessToken, isReady } = useAuth();
 
   return useQuery({
-    queryKey: ["users", "me"],
+    queryKey: ["users", "me", accessToken],
     queryFn: () => {
       if (!accessToken) {
         throw new Error("로그인이 필요합니다.");

@@ -3,6 +3,7 @@ import { Noto_Sans_KR, Outfit } from "next/font/google";
 
 import { AuthProvider } from "@/features/auth/context/AuthProvider";
 import { AppQueryProvider } from "@/lib/query/provider";
+import { TermsConsentGate } from "@/features/terms/components/TermsConsentGate";
 
 import "./globals.css";
 
@@ -35,7 +36,7 @@ export default function RootLayout({
     >
       <body className="flex min-h-full flex-col font-[family-name:var(--font-sans-kr)]">
         <AppQueryProvider>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider><TermsConsentGate>{children}</TermsConsentGate></AuthProvider>
         </AppQueryProvider>
       </body>
     </html>
