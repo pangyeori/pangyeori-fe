@@ -22,9 +22,7 @@ export const registerSchema = z
       .email("이메일 형식으로 입력해주세요."),
     password: passwordSchema,
     passwordConfirm: z.string().min(1, "비밀번호 확인을 입력해주세요."),
-    agreeService: z.boolean(),
-    agreePrivacy: z.boolean(),
-    agreeMarketing: z.boolean(),
+    agreedTermsIds: z.array(z.string()),
     emailVerified: z.boolean(),
   })
   .refine((data) => data.nicknameChecked, {
@@ -38,10 +36,6 @@ export const registerSchema = z
   .refine((data) => data.emailVerified, {
     message: "이메일 인증을 완료해주세요.",
     path: ["emailVerified"],
-  })
-  .refine((data) => data.agreeService && data.agreePrivacy, {
-    message: "필수 약관에 동의해주세요.",
-    path: ["agreeService"],
   });
 
 export type RegisterFormValues = z.infer<typeof registerSchema>;

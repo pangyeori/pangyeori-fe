@@ -5,6 +5,7 @@ export type UserProfile = {
   profileImageKey: string | null;
   profileImageUrl: string | null;
   joinedAt: string;
+  marketingAgreed: boolean;
 };
 
 export type UserProfileResponse = Omit<UserProfile, "profileImageUrl">;

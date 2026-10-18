@@ -12,6 +12,7 @@ import { ProfileImageEditor } from "@/features/mypage/components/ProfileImageEdi
 import { ProfileSkeleton } from "@/features/mypage/components/ProfileSkeleton";
 import { useMyProfile } from "@/features/mypage/hooks/useMyProfile";
 import { ApiError } from "@/lib/api/client";
+import { MarketingAgreement } from "@/features/terms/components/MarketingAgreement";
 
 function formatJoinedAt(joinedAt: string) {
   const dateParts = /^(\d{4})-(\d{2})-(\d{2})/.exec(joinedAt);
@@ -147,7 +148,7 @@ export default function MyPage() {
           </section>
         ) : null}
 
-        {isReady && isAuthenticated ? <MyDebates /> : null}
+        {isReady && isAuthenticated ? <><MarketingAgreement /><MyDebates /></> : null}
       </main>
 
     </div>
