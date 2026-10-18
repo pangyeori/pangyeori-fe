@@ -3,7 +3,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 
-import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/features/auth/context/AuthProvider";
 import { changeTermsAgreement } from "@/features/terms/api";
 import { TermsDetails } from "@/features/terms/components/TermsDetails";
@@ -27,14 +26,19 @@ function MarketingControl({ term, agreed, token, refresh, refreshTerms, refreshi
   });
   return (
     <div className="space-y-4">
-      <p className="text-sm">현재 마케팅 정보 수신: <strong>{agreed ? "동의" : "미동의"}</strong></p>
-      <TermsDetails term={term} />
-      <p className="text-xs text-[var(--ink-muted)]">선택 동의이며 언제든 철회할 수 있습니다.</p>
-      <Button variant="outline" disabled={refreshing} loading={mutation.isPending} onClick={() => mutation.mutate(!agreed)}>
-        {agreed ? "마케팅 수신 동의 철회" : "마케팅 수신에 동의"}
-      </Button>
+      <div className="flex items-center justify-between gap-4">
+        <span className="min-w-0 text-sm font-medium">마케팅 정보 수신 동의</span>
+        <div className="flex shrink-0 items-center gap-4">
+          <TermsDetails term={term} />
+          <button type="button" role="switch" aria-label="마케팅 정보 수신 동의" aria-checked={agreed}
+            aria-busy={mutation.isPending} disabled={refreshing || mutation.isPending}
+            onClick={() => mutation.mutate(!agreed)}
+            className={`inline-flex h-7 w-12 shrink-0 items-center rounded-full p-1 transition-colors focus-visible:outline-2 focus-visible:outline-offset-4 disabled:cursor-wait disabled:opacity-50 ${agreed ? "bg-[var(--ink)]" : "bg-gray-300"}`}>
+            <span aria-hidden="true" className={`size-5 rounded-full bg-white shadow-sm transition-transform motion-reduce:transition-none ${agreed ? "translate-x-5" : "translate-x-0"}`} />
+          </button>
+        </div>
+      </div>
       {mutation.error ? <p role="alert" className="text-sm text-[var(--danger)]">{mutation.error.message}</p> : null}
-      {mutation.isSuccess ? <p role="status" className="text-sm">마케팅 수신 설정을 저장했습니다.</p> : null}
     </div>
   );
 }
@@ -58,7 +62,6 @@ export function MarketingAgreement() {
 
   return (
     <section className="mt-6 space-y-4 rounded-2xl border border-[var(--line)] bg-white p-6 sm:p-8">
-      <h2 className="font-bold">마케팅 정보 수신 설정</h2>
       <TermsQueryStatus pending={terms.isPending || state.isPending} error={terms.error ?? state.error}
         empty={false} fetching={terms.isFetching || state.isFetching}
         onRetry={() => { void terms.refetch(); void state.refetch(); }} />

@@ -16,8 +16,8 @@ export function TermsAgreement({ terms, value, onChange, disabled = false, error
         전체 동의{terms.some((term) => !term.required) ? " (선택 항목 포함)" : ""}
       </label>
       {terms.map((term) => (
-        <div key={term.termsId} className="border-t border-[var(--line)] pt-3">
-          <label className="flex items-start gap-2.5 text-sm">
+        <div key={term.termsId} className="flex items-start justify-between gap-4">
+          <label className="flex min-w-0 items-start gap-2.5 pt-1 text-sm">
             <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-[var(--ink)]" checked={selected.includes(term.termsId)}
               onChange={(event) => onChange(event.target.checked ? [...selected, term.termsId] : selected.filter((id) => id !== term.termsId))} />
             <span>[{term.required ? "필수" : "선택"}] {term.title}</span>
