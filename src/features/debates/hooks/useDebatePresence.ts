@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Client } from "@stomp/stompjs";
 
 import { useAuth } from "@/features/auth/context/AuthProvider";
-import { getDebatePresence, type DebateRole } from "@/features/debates/api/debates";
+import { getDebatePresence, type DebateFreeMessage, type DebateRole } from "@/features/debates/api/debates";
+import { freeMessageError, mergeFreeMessages } from "@/features/debates/freeDebateMessages";
 import {
   applyDebateConnectionEvent,
   applyDebatePresenceSnapshot,
@@ -26,6 +27,43 @@ export function useDebatePresence(debateId: string, enabled: boolean) {
   const [connectionStatus, setConnectionStatus] = useState<DebateConnectionStatus>("connecting");
   const [connectedAt, setConnectedAt] = useState(0);
   const [latestProgressEvent, setLatestProgressEvent] = useState<DebateConnectionEvent | null>(null);
+  const [freeMessages, setFreeMessages] = useState<DebateFreeMessage[]>([]);
+  const clientRef = useRef<Client | null>(null);
+  const pendingMessage = useRef<{
+    content: string;
+    role: DebateRole;
+    resolve: () => void;
+    reject: (error: Error) => void;
+    timer: ReturnType<typeof setTimeout>;
+  } | null>(null);
+
+  const settleMessage = useCallback((error?: string) => {
+    const pending = pendingMessage.current;
+    if (!pending) return;
+    pendingMessage.current = null;
+    clearTimeout(pending.timer);
+    if (error) pending.reject(new Error(error));
+    else pending.resolve();
+  }, []);
+
+  const sendFreeMessage = useCallback((content: string, role: DebateRole) => new Promise<void>((resolve, reject) => {
+    const client = clientRef.current;
+    if (!client?.connected) return reject(new Error("채팅 연결을 확인한 뒤 다시 시도해주세요."));
+    if (pendingMessage.current) return reject(new Error("이전 메시지를 전송하고 있습니다."));
+    pendingMessage.current = {
+      content, role, resolve, reject,
+      timer: setTimeout(() => settleMessage("전송 결과를 확인하지 못했습니다. 대화 내역을 확인한 뒤 다시 시도해주세요."), 10_000),
+    };
+    try {
+      client.publish({
+        destination: `/pub/debates/${debateId}/free-messages`,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+    } catch {
+      settleMessage("메시지를 전송하지 못했습니다. 연결을 확인한 뒤 다시 시도해주세요.");
+    }
+  }), [debateId, settleMessage]);
 
   useEffect(() => {
     if (!accessToken || !enabled) return;
@@ -49,15 +87,30 @@ export function useDebatePresence(debateId: string, enabled: boolean) {
       reconnectDelay: 3000,
       debug: () => {},
     });
+    clientRef.current = client;
 
     client.onConnect = () => {
       if (!active) return;
       const currentConnectionRevision = ++connectionRevision;
       setConnectionStatus("connected");
       setConnectedAt(Date.now());
+      client.subscribe("/user/queue/errors", ({ body }) => {
+        if (active) settleMessage(freeMessageError(body));
+      });
       client.subscribe(`/sub/debates/${debateId}`, ({ body }) => {
+        if (!active) return;
         const event = parseDebateConnectionEvent(body, debateId);
         if (!event) return;
+
+        if (event.type === "FREE_MESSAGE_SENT") {
+          const message: DebateFreeMessage = {
+            id: event.messageId!, role: event.role!, content: event.content!, createdAt: event.submittedAt!,
+          };
+          // Merge inside the socket callback so batched React renders never drop messages.
+          setFreeMessages((current) => mergeFreeMessages(current, [message]));
+          if (pendingMessage.current?.role === message.role && pendingMessage.current.content === message.content) settleMessage();
+          return;
+        }
 
         if (isDebateProgressEvent(event)) {
           setLatestProgressEvent(event);
@@ -99,10 +152,15 @@ export function useDebatePresence(debateId: string, enabled: boolean) {
         // WebSocket events keep presence usable when snapshot recovery fails.
       });
     };
-    client.onStompError = () => active && setConnectionStatus("error");
+    client.onStompError = ({ body }) => {
+      if (!active) return;
+      settleMessage(freeMessageError(body));
+      setConnectionStatus("error");
+    };
     client.onWebSocketError = () => active && setConnectionStatus("error");
     client.onWebSocketClose = () => {
       if (!active) return;
+      settleMessage("연결이 끊겨 전송 결과를 확인하지 못했습니다. 재연결 후 대화 내역을 확인해주세요.");
       connectionRevision += 1;
       clearLeaveTimers();
       setPresence(initialDebatePresence);
@@ -112,10 +170,12 @@ export function useDebatePresence(debateId: string, enabled: boolean) {
     client.activate();
     return () => {
       active = false;
+      clientRef.current = null;
+      settleMessage("채팅 연결이 종료되었습니다.");
       clearLeaveTimers();
       void client.deactivate();
     };
-  }, [accessToken, debateId, enabled]);
+  }, [accessToken, debateId, enabled, settleMessage]);
 
-  return { ...presence, connectionStatus, connectedAt, latestProgressEvent };
+  return { ...presence, connectionStatus, connectedAt, latestProgressEvent, freeMessages, sendFreeMessage };
 }
