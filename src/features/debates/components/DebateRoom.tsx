@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Fragment, type FormEvent, useEffect, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Fragment, type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { Button } from "@/components/ui/Button";
@@ -12,6 +12,7 @@ import { useAuth } from "@/features/auth/context/AuthProvider";
 import {
   getDebate,
   getDebateHistories,
+  getDebateFreeMessages,
   getMyDebate,
   submitDebateHistory,
   debateStages,
@@ -34,6 +35,7 @@ import {
   speakingPosition,
 } from "@/features/debates/debateProgress";
 import { detectNewMessage } from "@/features/debates/debateMessages";
+import { canSendFreeMessage, mergeFreeMessages } from "@/features/debates/freeDebateMessages";
 import { useDebatePresence } from "@/features/debates/hooks/useDebatePresence";
 import { mergeDebateHistoriesEvent, type PresenceStatus } from "@/features/debates/presenceEvents";
 import { awaitingVerdictStage, canSubmitStatement } from "@/features/debates/debateVerdict";
@@ -183,14 +185,17 @@ function ParticipantCard({ role, position, status, name, profileImageUrl }: {
   );
 }
 
-function HistoryItem({ history, hostPosition, myPosition, opponentName, opponentProfileImageUrl }: {
+function HistoryItem({ history, hostPosition, myPosition, opponentName, opponentProfileImageUrl, authorRole }: {
   history: DebateHistory;
   hostPosition: Position;
   myPosition: Position | undefined;
   opponentName: string;
   opponentProfileImageUrl: string | null;
+  authorRole?: DebateRole;
 }) {
-  const position = speakingPosition(history.stage);
+  const position = authorRole
+    ? authorRole === "HOST" ? hostPosition : hostPosition === "PROS" ? "CONS" : "PROS"
+    : speakingPosition(history.stage);
   const role = position ? roleForPosition(position, hostPosition) : null;
   const mine = Boolean(position && position === myPosition);
   const submittedAt = new Date(parseServerTime(history.createdAt));
@@ -246,7 +251,6 @@ export function DebateRoom({ debateId }: { debateId: string }) {
       const debate = query.state.data;
       if (debate?.status === "READY") return 1000;
       return debate?.status === "IN_PROGRESS"
-        && debate.currentStage !== "FREE"
         && debate.currentStage !== "FINAL_VERDICT" ? 3000 : false;
     },
   });
@@ -271,6 +275,20 @@ export function DebateRoom({ debateId }: { debateId: string }) {
     enabled: Boolean(accessToken && opponentImageKey),
   });
   const presence = useDebatePresence(debateId, entryAllowed);
+  const freeMessagesEnabled = Boolean(accessToken && entryAllowed
+    && ["FREE", "FINAL_VERDICT"].includes(debateQuery.data?.currentStage ?? ""));
+  const freeMessagesQuery = useInfiniteQuery({
+    queryKey: ["debates", debateId, "free-messages", accessToken],
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => getDebateFreeMessages(debateId, accessToken!, pageParam),
+    getNextPageParam: (page) => page.hasNext ? page.nextCursor : undefined,
+    enabled: freeMessagesEnabled,
+    retry: false,
+  });
+  const freeMessages = useMemo(() => mergeFreeMessages(
+    freeMessagesQuery.data?.pages.flatMap((page) => page.items) ?? [],
+    presence.freeMessages,
+  ), [freeMessagesQuery.data, presence.freeMessages]);
   const syncedConnection = useRef(0);
   const recoveredDeadline = useRef<string | null>(null);
   const scheduledSubmissionInFlight = useRef(false);
@@ -281,6 +299,25 @@ export function DebateRoom({ debateId }: { debateId: string }) {
   const { refetch: refetchDebate } = debateQuery;
   const { refetch: refetchHistories } = historiesQuery;
   const { refetch: refetchMember } = memberQuery;
+  const { refetch: refetchFreeMessages } = freeMessagesQuery;
+
+  const freeMessageMutation = useMutation({
+    mutationFn: (message: string) => {
+      if (!memberQuery.data || !canSendFreeMessage(debateQuery.data, presence.connectionStatus === "connected", Date.now())) {
+        throw new Error("지금은 자유 토론 메시지를 전송할 수 없습니다.");
+      }
+      return presence.sendFreeMessage(message, memberQuery.data.myRole);
+    },
+    onSuccess: () => {
+      setContent("");
+      setSubmitError("");
+      if (statementInput.current) resetStatementInput(statementInput.current);
+    },
+    onError: (error) => {
+      setSubmitError(error.message);
+      void Promise.all([refetchFreeMessages(), refetchDebate()]);
+    },
+  });
 
   const submitMutation = useMutation({
     mutationFn: (statement: string) => submitDebateHistory(debateId, statement, accessToken!),
@@ -321,6 +358,10 @@ export function DebateRoom({ debateId }: { debateId: string }) {
   }, [presence.connectedAt, refetchDebate, refetchHistories, refetchMember]);
 
   useEffect(() => {
+    if (freeMessagesEnabled && presence.connectedAt) void refetchFreeMessages();
+  }, [freeMessagesEnabled, debateQuery.data?.currentStage, presence.connectedAt, refetchFreeMessages]);
+
+  useEffect(() => {
     const event = presence.latestProgressEvent;
     if (!event) return;
     if (event.debateId !== debateId) return;
@@ -349,10 +390,11 @@ export function DebateRoom({ debateId }: { debateId: string }) {
     if (!turnEndsAt || !Number.isFinite(deadline) || recoveredDeadline.current === turnEndsAt) return;
     const timer = window.setTimeout(() => {
       recoveredDeadline.current = turnEndsAt;
-      void refetchHistories().then(() => refetchDebate());
+      // The free-message endpoint also recovers a delayed server stage timer.
+      void (freeMessagesEnabled ? refetchFreeMessages() : refetchHistories()).then(() => refetchDebate());
     }, Math.max(0, deadline - Date.now()) + 300);
     return () => window.clearTimeout(timer);
-  }, [debateQuery.data?.turnEndsAt, refetchDebate, refetchHistories]);
+  }, [debateQuery.data?.turnEndsAt, freeMessagesEnabled, refetchDebate, refetchFreeMessages, refetchHistories]);
 
   useEffect(() => {
     const updateFloatingProgress = () => setShowFloatingProgress(window.scrollY > 24);
@@ -367,12 +409,12 @@ export function DebateRoom({ debateId }: { debateId: string }) {
   useEffect(() => {
     const next = detectNewMessage(
       latestMessageId.current,
-      historiesQuery.data?.histories,
+      [...(historiesQuery.data?.histories ?? []), ...freeMessages],
       shouldStickToLatestMessage.current,
     );
     latestMessageId.current = next.latestId;
     if (next.preview) setNewMessagePreview(next.preview);
-  }, [historiesQuery.data?.histories]);
+  }, [historiesQuery.data?.histories, freeMessages]);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
@@ -381,7 +423,13 @@ export function DebateRoom({ debateId }: { debateId: string }) {
       }
     });
     return () => cancelAnimationFrame(frame);
-  }, [debateQuery.data?.currentStage, historiesQuery.data?.histories.length, historiesQuery.data?.verdicts.length, awaitingVerdict, scheduledContent]);
+  }, [debateQuery.data?.currentStage, historiesQuery.data?.histories.length, historiesQuery.data?.verdicts.length, freeMessages.length, awaitingVerdict, scheduledContent]);
+
+  const canChat = Boolean(memberQuery.data)
+    && canSendFreeMessage(debateQuery.data, presence.connectionStatus === "connected", now);
+  useEffect(() => {
+    if (canChat && !freeMessageMutation.isPending) statementInput.current?.focus();
+  }, [canChat, freeMessageMutation.isPending]);
 
   const shouldFocusStatement = debateQuery.data?.status === "IN_PROGRESS"
     && debateQuery.data.currentStage !== "FREE"
@@ -426,8 +474,10 @@ export function DebateRoom({ debateId }: { debateId: string }) {
   const isFreeDebate = debate.currentStage === "FREE";
   const remainingSeconds = remainingTurnSeconds(debate.turnEndsAt, now);
   const isMyTurn = started && !isFreeDebate && Boolean(currentSpeaker && currentSpeaker === myPosition);
-  const canCompose = started && !isFreeDebate && Boolean(member) && Boolean(currentSpeaker) && !scheduledContent;
-  const isPrewriting = canCompose && !isMyTurn;
+  const canCompose = isFreeDebate ? canChat : started && Boolean(member) && Boolean(currentSpeaker) && !scheduledContent;
+  const isPrewriting = canCompose && !isFreeDebate && !isMyTurn;
+  const isSending = submitMutation.isPending || freeMessageMutation.isPending;
+  const maxLength = isFreeDebate ? 500 : 1000;
   const myNickname = profileQuery.data?.nickname ?? "내 정보 확인 중";
   const hostName = member?.myRole === "HOST" ? `${myNickname}(나)` : member?.opponent?.nickname ?? "개설자";
   const guestName = member?.myRole === "GUEST" ? `${myNickname}(나)` : member?.opponent?.nickname ?? "게스트";
@@ -454,10 +504,14 @@ export function DebateRoom({ debateId }: { debateId: string }) {
     ? "토론 시작을 기다리고 있습니다."
     : !member
       ? "내 진영 정보를 확인하고 있습니다."
+      : isFreeDebate
+        ? remainingSeconds === 0
+          ? "자유 토론 시간이 종료되었습니다."
+          : presence.connectionStatus !== "connected"
+            ? "채팅 연결 중입니다. 잠시 기다려주세요."
+            : "순서에 관계없이 자유롭게 의견을 나눠보세요."
       : awaitingVerdict
         ? "AI가 양측 발언을 검토하고 있습니다."
-      : isFreeDebate
-        ? "자유 토론 메시지 연결을 준비하고 있습니다."
       : currentSpeaker === null
         ? "다음 토론 단계를 기다리고 있습니다."
         : scheduledContent
@@ -469,9 +523,13 @@ export function DebateRoom({ debateId }: { debateId: string }) {
   const submitStatement = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const statement = content.trim();
-    if (!canCompose || !statement || submitMutation.isPending) return;
+    if (!canCompose || !statement || content.length > maxLength || isSending) return;
     setSubmitError("");
     shouldStickToLatestMessage.current = true;
+    if (isFreeDebate) {
+      freeMessageMutation.mutate(statement);
+      return;
+    }
     if (!isMyTurn) {
       setScheduledContent(statement);
       setContent("");
@@ -607,6 +665,55 @@ export function DebateRoom({ debateId }: { debateId: string }) {
                   {timelineStages.map((stage) => (
                     <Fragment key={stage}>
                       <StageNotice stage={stage} />
+                      {stage === "FREE" ? (
+                        <>
+                          {freeMessagesQuery.hasNextPage ? (
+                            <li className="text-center">
+                              <button
+                                type="button"
+                                className="text-xs font-semibold text-[var(--brand-blue)] underline disabled:opacity-50"
+                                disabled={freeMessagesQuery.isFetching}
+                                onClick={async () => {
+                                  const viewport = messageViewport.current;
+                                  const height = viewport?.scrollHeight ?? 0;
+                                  const top = viewport?.scrollTop ?? 0;
+                                  shouldStickToLatestMessage.current = false;
+                                  await freeMessagesQuery.fetchNextPage();
+                                  requestAnimationFrame(() => {
+                                    if (viewport) viewport.scrollTop = top + viewport.scrollHeight - height;
+                                  });
+                                }}
+                              >
+                                {freeMessagesQuery.isFetchingNextPage ? "이전 대화 불러오는 중…" : "이전 대화 더 보기"}
+                              </button>
+                            </li>
+                          ) : null}
+                          {freeMessagesQuery.isPending ? (
+                            <li className="py-4 text-center text-sm text-[var(--ink-muted)]" role="status">자유 토론 대화를 불러오고 있습니다.</li>
+                          ) : !freeMessages.length && !freeMessagesQuery.isError ? (
+                            <li className="py-4 text-center text-sm text-[var(--ink-muted)]">아직 메시지가 없습니다. 자유롭게 의견을 나눠보세요.</li>
+                          ) : null}
+                          {freeMessagesQuery.isError ? (
+                            <li className="py-3 text-center text-sm text-[var(--danger)]" role="alert">
+                              <p>{freeMessagesQuery.error.message}</p>
+                              <button type="button" className="mt-2 underline" onClick={() => void (
+                                freeMessagesQuery.isFetchNextPageError ? freeMessagesQuery.fetchNextPage() : refetchFreeMessages()
+                              )}>대화 다시 불러오기</button>
+                            </li>
+                          ) : null}
+                          {freeMessages.map((message) => (
+                            <HistoryItem
+                              key={message.id}
+                              history={{ ...message, stage: "FREE" }}
+                              authorRole={message.role}
+                              hostPosition={debate.hostPosition}
+                              myPosition={myPosition}
+                              opponentName={opponentName}
+                              opponentProfileImageUrl={opponentProfileImageUrl}
+                            />
+                          ))}
+                        </>
+                      ) : null}
                       {histories?.filter((history) => history.stage === stage).map((history) => (
                         <HistoryItem
                           key={history.id}
@@ -691,7 +798,7 @@ export function DebateRoom({ debateId }: { debateId: string }) {
             </div>
 
             <form className="border-t border-[var(--line)] p-4 sm:p-5" onSubmit={submitStatement}>
-              <label className="sr-only" htmlFor="debate-statement">토론 발언</label>
+              <label className="sr-only" htmlFor="debate-statement">{isFreeDebate ? "자유 토론 메시지" : "토론 발언"}</label>
               <textarea
                 ref={statementInput}
                 id="debate-statement"
@@ -699,8 +806,8 @@ export function DebateRoom({ debateId }: { debateId: string }) {
                 rows={1}
                 className={`h-11 max-h-36 min-h-11 w-full resize-none overflow-y-hidden rounded-xl border border-[var(--line)] px-4 py-2.5 text-sm leading-6 outline-none transition focus:border-[var(--brand-blue)] focus:ring-2 focus:ring-[var(--brand-blue-soft)] disabled:cursor-not-allowed disabled:opacity-70 ${isPrewriting ? "bg-slate-100" : isMyTurn ? "bg-white" : "bg-[var(--surface-muted)]"}`}
                 value={content}
-                maxLength={1000}
-                disabled={!canCompose || submitMutation.isPending}
+                maxLength={maxLength}
+                disabled={!canCompose || isSending}
                 placeholder={inputPlaceholder}
                 onChange={(event) => {
                   setContent(event.target.value);
@@ -714,12 +821,12 @@ export function DebateRoom({ debateId }: { debateId: string }) {
               />
               <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                 <div>
-                  <span className="text-xs text-[var(--ink-faint)]">{content.length}/1000</span>
+                  <span className={`text-xs ${content.length > maxLength ? "text-[var(--danger)]" : "text-[var(--ink-faint)]"}`}>{content.length}/{maxLength}</span>
                   <p id="debate-statement-help" className="mt-1 text-[11px] text-[var(--ink-faint)]">전송 Enter · 줄바꿈 Shift + Enter</p>
                   {submitError ? <p className="mt-1 text-xs font-semibold text-[var(--danger)]" role="alert">{submitError}</p> : null}
                 </div>
-                <Button className="!h-10 sm:!w-auto sm:px-5" type="submit" loading={submitMutation.isPending} disabled={!canCompose || !content.trim()}>
-                  발언 제출
+                <Button className="!h-10 sm:!w-auto sm:px-5" type="submit" loading={isSending} disabled={!canCompose || !content.trim() || content.length > maxLength}>
+                  {isFreeDebate ? "메시지 전송" : "발언 제출"}
                 </Button>
               </div>
             </form>

@@ -19,6 +19,7 @@ export type DebateConnectionEventType =
   | "STAGE_CHANGED"
   | "STATEMENT_SUBMITTED"
   | "STATEMENT_TIMED_OUT"
+  | "FREE_MESSAGE_SENT"
   | "VERDICT_ISSUED";
 
 export type DebateConnectionEvent = {
@@ -32,6 +33,7 @@ export type DebateConnectionEvent = {
   verdictStatus?: DebateVerdictStatus | null;
   winnerPosition?: WinnerPosition | null;
   reasoning?: string | null;
+  messageId?: string | null;
 };
 
 export type PresenceStatus = "unknown" | "entered" | "reconnecting" | "left";
@@ -75,7 +77,14 @@ export function parseDebateConnectionEvent(raw: string, debateId: string): Debat
       "STATEMENT_SUBMITTED",
       "STATEMENT_TIMED_OUT",
       "VERDICT_ISSUED",
+      "FREE_MESSAGE_SENT",
     ].includes(type)) return null;
+    if (type === "FREE_MESSAGE_SENT") {
+      if ((value.role !== "HOST" && value.role !== "GUEST")
+        || typeof value.messageId !== "string" || !value.messageId
+        || typeof value.content !== "string"
+        || typeof value.submittedAt !== "string" || !Number.isFinite(Date.parse(value.submittedAt))) return null;
+    }
     if (["ENTERED", "LEFT", "STATEMENT_SUBMITTED", "STATEMENT_TIMED_OUT"].includes(type)
       && value.role !== "HOST" && value.role !== "GUEST") return null;
     if (["STAGE_CHANGED", "STATEMENT_SUBMITTED", "STATEMENT_TIMED_OUT", "VERDICT_ISSUED"].includes(type)
@@ -102,7 +111,7 @@ export function applyDebateConnectionEvent(
   current: DebatePresence,
   event: DebateConnectionEvent,
 ): DebatePresence {
-  if (isDebateProgressEvent(event)) return current;
+  if (isDebateProgressEvent(event) || event.type === "FREE_MESSAGE_SENT") return current;
   if (event.type === "STARTED") {
     return {
       roles: { HOST: "entered", GUEST: "entered" },
