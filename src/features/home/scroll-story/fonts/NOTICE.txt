@@ -1,0 +1,16 @@
+Pangyeori Home — landing-page subset of Pretendard Variable v1.3.9
+Copyright (c) 2021, Kil Hyung-jin. Licensed under SIL OFL 1.1; see OFL.txt.
+Original: https://github.com/orioncactus/pretendard/tree/v1.3.9
+Source: https://raw.githubusercontent.com/orioncactus/pretendard/v1.3.9/packages/pretendard/dist/web/variable/woff2/PretendardVariable.woff2
+
+Source SHA256: 9599f12fd42fc0bce1cd50b47a0c022e108d7aa64dd0d1bb0ed44f3282d900b4
+
+Modifications: weight axis limited to 400–700; glyphs restricted to the landing
+page source and basic Latin/punctuation; modified font renamed Pangyeori Home
+in accordance with the Reserved Font Name condition. No outline edits.
+
+Rebuild with scripts/subset-home-font.py after changing homepage copy. Use a
+separate Python environment with fonttools[woff]==4.60.1. This utility is not
+part of the runtime or Next.js build. Keep the source font outside the repo.
+The generated font is served locally by next/font/local only on this page.
+Characters not in the subset fall back to the existing Noto Sans KR font.
