@@ -1,0 +1,21 @@
+.deck { position: absolute; inset: 0; z-index: 2; pointer-events: none; visibility: hidden; }
+.deck[data-active="true"] { visibility: visible; }
+.card { position: absolute; left: var(--argument-x-0, 35%); top: var(--argument-y, 28%); width: var(--argument-size, 220px); container-type: inline-size; perspective: 1000px; --fan: -3deg; transform: translate(-50%, -50%) rotate(var(--fan)) scale(var(--argument-scale, 1)); opacity: var(--argument-opacity, 1); pointer-events: auto; }
+.card[data-tone="distraction"] { left: var(--argument-x-1, 65%); --fan: 3deg; }
+.entrance { perspective: 1000px; }
+.tilt { position: relative; transform: rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg)); transition: transform 180ms ease-out; }
+.face { display: flex; flex-direction: column; justify-content: space-between; aspect-ratio: 1 / 1.08; padding: 11cqi; border: 1px solid #e9ecf0; border-radius: 20px; background: #fff; box-shadow: 0 16px 40px -16px #192b4529, 0 2px 6px #192b4505; }
+.top { color: var(--home-secondary); font-size: clamp(11px, 6cqi, 13px); font-weight: 500; line-height: 1.5; }
+.face h3 { margin-top: 24px; color: var(--home-ink); font-size: clamp(17px, 10cqi, 22px); font-weight: 500; line-height: 1.45; letter-spacing: -.025em; }
+.face h3 strong { display: inline-block; margin-top: 2px; color: var(--home-accent); font-size: 1.45em; font-weight: 600; line-height: 1.3; }
+.card[data-tone="distraction"] h3 strong { color: var(--home-ink); }
+@media (prefers-reduced-motion: no-preference) {
+  .deck[data-active="true"][data-presentation="stage"] .entrance { animation: unfold .6s cubic-bezier(.2,.75,.25,1) both; }
+  .deck[data-active="true"][data-presentation="stage"] .card:nth-child(2) .entrance { animation-delay: 80ms; }
+  @keyframes unfold { from { opacity: 0; transform: translateY(20px) rotateX(-12deg) scale(.96); } to { opacity: 1; transform: none; } }
+}
+.deck[data-presentation="static"] { position: relative; inset: auto; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px; padding: 12px 8px; visibility: visible; }
+.deck[data-presentation="static"] .card { position: relative; inset: auto; width: 100%; transform: rotate(var(--fan)); opacity: 1; }
+.deck[data-presentation="static"] .top { font-size: .8125rem; }
+.deck[data-presentation="static"] h3 { font-size: 1.25rem; }
+@media (prefers-reduced-motion: reduce) { .tilt { transform: none; transition: none; } }
