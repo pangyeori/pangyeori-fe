@@ -51,6 +51,7 @@ export type Invitation = {
   title: string;
   description: string | null;
   hostNickname: string;
+  hostProfileImageKey?: string | null;
   guestPosition: Position;
   debateStatus: string;
   guestStatus: GuestStatus;
