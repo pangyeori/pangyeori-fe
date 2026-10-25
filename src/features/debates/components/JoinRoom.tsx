@@ -17,6 +17,7 @@ import {
 import { DebateTimeBadges } from "@/features/debates/components/DebateTimeBadges";
 import { DebateRoomSkeleton } from "@/features/debates/components/DebateRoomSkeleton";
 import { isHostInvitation, rememberDebateRoom } from "@/features/debates/roomSession";
+import { getProfileImageViewUrl } from "@/features/mypage/api/getMyProfile";
 import { ProfileAvatar } from "@/features/mypage/components/ProfileAvatar";
 import { useMyProfile } from "@/features/mypage/hooks/useMyProfile";
 import { requestAge } from "@/features/debates/candidateList";
@@ -49,6 +50,12 @@ export function JoinRoom({ inviteToken, debateId }: { inviteToken: string; debat
     queryKey: ["debate-invitations", inviteToken, accessToken],
     queryFn: () => getInvitation(inviteToken, accessToken!),
     enabled: isReady && Boolean(inviteToken && accessToken),
+  });
+  const hostProfileImageKey = invitationQuery.data?.hostProfileImageKey;
+  const hostProfileImageQuery = useQuery({
+    queryKey: ["storage", "profile-image", hostProfileImageKey, accessToken],
+    queryFn: () => getProfileImageViewUrl(hostProfileImageKey!, accessToken!),
+    enabled: Boolean(accessToken && hostProfileImageKey),
   });
   const hostIsPros = invitationQuery.data?.guestPosition !== "PROS";
   const actualDebateId = invitationQuery.data?.debateId ?? debateId;
@@ -231,7 +238,11 @@ export function JoinRoom({ inviteToken, debateId }: { inviteToken: string; debat
                 <div className={`rounded-2xl border p-5 ${hostIsPros ? "border-blue-200 bg-blue-50" : "border-rose-200 bg-rose-50"}`}>
                   <p className={`text-sm font-bold ${hostIsPros ? "text-blue-600" : "text-rose-600"}`}>{invitationQuery.data?.guestPosition === "PROS" ? "반대" : "찬성"} 진영</p>
                   <div className="mt-5 flex items-center gap-3">
-                    <ProfileAvatar nickname={invitationQuery.data?.hostNickname ?? "개설자"} profileImageUrl={null} className="h-11 w-11" />
+                    <ProfileAvatar
+                      nickname={invitationQuery.data?.hostNickname ?? "개설자"}
+                      profileImageUrl={hostProfileImageQuery.data?.url ?? null}
+                      className="h-11 w-11"
+                    />
                     <div>
                       <p className="font-bold text-[var(--ink)]">{invitationQuery.data?.hostNickname ?? "개설자 정보 확인 중"}</p>
                       <p className="mt-1 text-xs text-[var(--ink-muted)]">상대방</p>
