@@ -1,5 +1,24 @@
 import { SiteHeader } from "@/components/layout/SiteHeader";
 
+export function DebateMessagesSkeleton({ label = "발언 내역 불러오는 중" }: { label?: string }) {
+  return (
+    <div className="space-y-5 motion-safe:animate-pulse" aria-label={label} aria-busy="true" role="status">
+      <div className="flex items-start gap-2">
+        <div className="h-12 w-12 shrink-0 rounded-full bg-slate-100" />
+        <div className="w-3/5 space-y-2">
+          <div className="h-3 w-24 rounded bg-slate-100" />
+          <div className="h-20 rounded-2xl rounded-bl-md bg-slate-100" />
+        </div>
+      </div>
+      <div className="ml-auto h-20 w-3/5 rounded-2xl rounded-br-md bg-slate-200" />
+      <div className="flex items-start gap-2">
+        <div className="h-12 w-12 shrink-0 rounded-full bg-slate-100" />
+        <div className="h-24 w-4/5 rounded-2xl rounded-bl-md bg-slate-100" />
+      </div>
+    </div>
+  );
+}
+
 export function DebateRoomSkeleton() {
   return (
     <div className="flex min-h-full flex-1 flex-col bg-[var(--page-bg)]">

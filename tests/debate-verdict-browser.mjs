@@ -41,8 +41,12 @@ try {
     }
     throw new Error(`Timed out: ${expression}`);
   };
-  const debate = { id: "verdict-test", title: "AI 판결 브라우저 검증", description: null, hostPosition: "PROS", guestPosition: "CONS", status: "IN_PROGRESS", currentStage: "OPENING_PROS", turnEndsAt: new Date(Date.now() + 600000).toISOString(), turnTimeSeconds: 600, freeDebateTimeSeconds: 300, inviteToken: null };
+  const debate = { id: "verdict-test", title: "AI 판결 브라우저 검증", description: null, hostPosition: "PROS", guestPosition: "CONS", status: "IN_PROGRESS", currentStage: "OPENING_PROS", turnEndsAt: new Date(Date.now() + 600000).toISOString(), turnTimeSeconds: 600, freeDebateTimeSeconds: 300, inviteToken: null, winnerPosition: null };
   const data = { histories: [], verdicts: [] };
+  const freeMessages = [
+    { id: "01-free-host", role: "HOST", content: "자유 토론 찬성 발언", createdAt: new Date().toISOString() },
+    { id: "02-free-guest", role: "GUEST", content: "자유 토론 반대 발언", createdAt: new Date().toISOString() },
+  ];
   let submits = 0;
   let historyGets = 0;
   ws.addEventListener("message", ({ data: raw }) => {
@@ -60,10 +64,11 @@ try {
     let result;
     let status = 200;
     if (path === "/api/v1/auth/refresh") result = { accessToken: "test-session", tokenType: "Bearer" };
+    else if (path === "/api/v1/terms") result = [];
     else if (path === "/api/v1/users/me/term-agreements/pending") result = [];
     else if (path === "/api/v1/debates/verdict-test") result = debate;
-    else if (path === "/api/v1/debates/verdict-test/free-messages") result = { items: [], hasNext: false, nextCursor: null };
-    else if (path === "/api/v1/debates/me") result = { items: [{ ...debate, debateId: debate.id, myRole: "HOST", myPosition: "PROS", opponent: { userId: "guest", nickname: "상대", profileImageKey: null } }], hasNext: false, nextCursor: null };
+    else if (path === "/api/v1/debates/verdict-test/free-messages") result = { items: freeMessages, hasNext: false, nextCursor: null };
+    else if (path === "/api/v1/debates/me") result = { items: [{ ...debate, debateId: debate.id, debateStatus: debate.status, myRole: "HOST", myPosition: "PROS", opponent: { userId: "guest", nickname: "상대", profileImageKey: null } }], hasNext: false, nextCursor: null };
     else if (path === "/api/v1/users/me") result = { id: "host", nickname: "테스터", email: "test@example.invalid", profileImageKey: null };
     else if (path === "/api/v1/notifications/unread-count") result = { count: 0 };
     else if (path === "/api/v1/debates/verdict-test/histories") {
@@ -108,12 +113,12 @@ try {
   })()`);
   await until("!document.querySelector('button[type=submit]').disabled");
   await evaluate("document.querySelector('#debate-statement').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))");
-  await until("document.body.innerText.includes('찬성 측 실제 제출 동작 검증')");
+  await until("document.body?.innerText.includes('찬성 측 실제 제출 동작 검증')");
   assert.equal(submits, 1);
   data.histories.push({ id: "opening-cons", stage: "OPENING_CONS", content: "상대의 반대 입론", createdAt: new Date().toISOString() });
   debate.currentStage = "VERDICT_1";
   debate.turnEndsAt = null;
-  await until("document.body.innerText.includes('1차 판정을 정리하고 있습니다')");
+  await until("document.body?.innerText.includes('1차 판정을 정리하고 있습니다')");
   assert.equal(await evaluate("document.querySelector('#debate-statement').disabled"), true);
   const readsWhilePending = historyGets;
   await pause(3500);
@@ -122,19 +127,19 @@ try {
   data.verdicts.push({ id: "verdict-1", stage: "VERDICT_1", status: "SUCCESS", winnerPosition: "PROS", reasoning: "찬성 측이 구체적인 근거를 제시했습니다.", createdAt: new Date().toISOString() });
   debate.currentStage = "REBUTTAL_PROS";
   await call("Page.reload");
-  await until("document.body.innerText.includes('찬성 측 우세')");
+  await until("document.body?.innerText.includes('찬성 측 우세')");
   assert.equal(await evaluate("document.querySelector('#debate-statement').disabled"), false);
   const readsAfterResult = historyGets;
   await pause(3500);
   assert.equal(historyGets, readsAfterResult, "polling stops when verdict is stored");
   await call("Page.reload");
-  await until("document.body.innerText.includes('찬성 측 우세')");
+  await until("document.body?.innerText.includes('찬성 측 우세')");
   data.verdicts[0].winnerPosition = "DRAW";
   await call("Page.reload");
-  await until("document.body.innerText.includes('무승부')");
+  await until("document.body?.innerText.includes('무승부')");
   data.verdicts[0] = { ...data.verdicts[0], status: "FAILED", winnerPosition: null, reasoning: null };
   await call("Page.reload");
-  await until("document.body.innerText.includes('AI 판결을 완료하지 못했습니다')");
+  await until("document.body?.innerText.includes('AI 판결을 완료하지 못했습니다')");
   debate.currentStage = "FREE";
   debate.turnEndsAt = new Date(Date.now() + 4000).toISOString();
   await call("Page.reload");
@@ -145,8 +150,32 @@ try {
   await pause(4500);
   assert.equal(await evaluate("document.querySelector('#debate-statement').disabled"), true);
   assert.equal(submits, 1, "free debate does not create local mock messages");
+  data.verdicts.push({
+    id: "final-verdict", stage: "FINAL_VERDICT", status: "SUCCESS", winnerPosition: "PROS",
+    reasoning: "전체 발언을 종합하면 찬성 측의 논거와 대응이 더 구체적이었습니다.",
+    participantProsScore: 62.5, participantConsScore: 37.5, createdAt: new Date().toISOString(),
+  });
+  debate.currentStage = "FINAL_VERDICT";
+  debate.status = "FINISHED";
+  debate.turnEndsAt = null;
+  debate.winnerPosition = "PROS";
+  await call("Page.reload");
+  await until("document.body?.innerText.includes('찬성 측 승리')");
+  assert.equal(await evaluate("document.body.innerText.includes('토론에서 승리했습니다')"), true);
+  assert.equal(await evaluate("document.body.innerText.includes('62.5점')"), true);
+  assert.equal(await evaluate("document.body.innerText.includes('37.5점')"), true);
+  assert.equal(await evaluate("document.body.innerText.includes('최종 판결 근거')"), true);
+  assert.equal(await evaluate("document.body.innerText.includes('지난 토론 내용')"), true);
+  assert.equal(await evaluate("document.body.innerText.includes('자유 토론 찬성 발언')"), true);
+  assert.equal(await evaluate("document.body.innerText.includes('자유 토론 반대 발언')"), true);
+  assert.equal(await evaluate("document.querySelector('#debate-statement')"), null, "the final screen replaces the composer");
+  await call("Page.navigate", { url: "http://localhost:3000/mypage" });
+  await until("document.body?.innerText.includes('최종 판결 보기')");
+  await until("document.body?.innerText.includes('승리')");
+  assert.equal(await evaluate("document.body.innerText.includes('토론 완료')"), false);
+  assert.equal(await evaluate("document.body.innerText.includes('찬성 62.5 : 37.5 반대')"), false);
   assert.deepEqual(errors, []);
-  console.log("PASS: statement → pending without polling → verdict → free-debate disabled without mocks");
+  console.log("PASS: statement → pending → verdict → free debate → final verdict → mypage result");
   await call("Browser.close");
 } finally {
   ws?.close();

@@ -83,6 +83,7 @@ export type DebateDetail = {
   turnTimeSeconds: number;
   freeDebateTimeSeconds: number;
   inviteToken: string | null;
+  winnerPosition: WinnerPosition | null;
 };
 
 export type MyDebate = {
@@ -120,6 +121,8 @@ export type DebateVerdict = {
   winnerPosition: WinnerPosition | null;
   reasoning: string | null;
   createdAt: string;
+  participantProsScore: number | null;
+  participantConsScore: number | null;
 };
 
 export type DebateHistories = {
@@ -202,7 +205,7 @@ export async function getMyDebate(debateId: string, token: string) {
   let cursor: string | null = null;
   do {
     const page = await getMyDebates(token, cursor, {
-      status: ["READY", "IN_PROGRESS"],
+      status: ["READY", "IN_PROGRESS", "FINISHED"],
       pageSize: 50,
     });
     const debate = page.items.find((item) => item.debateId === debateId);

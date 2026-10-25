@@ -23,7 +23,8 @@ import {
   type DebateStage,
   type Position,
 } from "@/features/debates/api/debates";
-import { DebateRoomSkeleton } from "@/features/debates/components/DebateRoomSkeleton";
+import { DebateMessagesSkeleton, DebateRoomSkeleton } from "@/features/debates/components/DebateRoomSkeleton";
+import { DebateFinalVerdict, DebateFinalVerdictSkeleton } from "@/features/debates/components/DebateFinalVerdict";
 import { DebateVerdictCard, DebateVerdictPendingCard } from "@/features/debates/components/DebateVerdictCard";
 import { DebateTimeBadges, formatDebateTime } from "@/features/debates/components/DebateTimeBadges";
 import {
@@ -229,7 +230,7 @@ function HistoryItem({ history, hostPosition, myPosition, opponentName, opponent
   );
 }
 
-export function DebateRoom({ debateId }: { debateId: string }) {
+export function DebateRoom({ debateId, finalView = false }: { debateId: string; finalView?: boolean }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { accessToken, isReady } = useAuth();
@@ -257,12 +258,17 @@ export function DebateRoom({ debateId }: { debateId: string }) {
         && debate.currentStage !== "FINAL_VERDICT" ? 3000 : false;
     },
   });
-  const entryAllowed = debateQuery.data?.status === "READY" || debateQuery.data?.status === "IN_PROGRESS";
+  const entryAllowed = debateQuery.data?.status === "READY"
+    || debateQuery.data?.status === "IN_PROGRESS"
+    || debateQuery.data?.status === "FINISHED";
+  const realtimeEnabled = debateQuery.data?.status === "READY" || debateQuery.data?.status === "IN_PROGRESS";
   const historiesQuery = useQuery({
     queryKey: ["debates", debateId, "histories", accessToken],
     queryFn: () => getDebateHistories(debateId, accessToken!),
     enabled: Boolean(accessToken && entryAllowed),
     retry: false,
+    refetchInterval: (query) => debateQuery.data?.currentStage === "FINAL_VERDICT"
+      && !query.state.data?.verdicts.some(({ stage }) => stage === "FINAL_VERDICT") ? 3000 : false,
   });
   const memberQuery = useQuery({
     queryKey: ["debates", debateId, "member", accessToken],
@@ -277,9 +283,9 @@ export function DebateRoom({ debateId }: { debateId: string }) {
     queryFn: () => getProfileImageViewUrl(opponentImageKey!, accessToken!),
     enabled: Boolean(accessToken && opponentImageKey),
   });
-  const presence = useDebatePresence(debateId, entryAllowed);
+  const presence = useDebatePresence(debateId, realtimeEnabled);
   const freeMessagesEnabled = Boolean(accessToken && entryAllowed
-    && ["FREE", "FINAL_VERDICT"].includes(debateQuery.data?.currentStage ?? ""));
+    && (debateQuery.data?.currentStage === "FREE" || debateQuery.data?.currentStage === "FINAL_VERDICT"));
   const freeMessagesQuery = useInfiniteQuery({
     queryKey: ["debates", debateId, "free-messages", accessToken],
     initialPageParam: null as string | null,
@@ -389,6 +395,18 @@ export function DebateRoom({ debateId }: { debateId: string }) {
       queryClient.setQueryData<DebateDetail>(
         ["debates", debateId, "detail", accessToken],
         (data) => data ? { ...data, currentStage: event.stage!, turnEndsAt: event.turnEndsAt ?? null } : data,
+      );
+    }
+    if (event.type === "DEBATE_ENDED") {
+      queryClient.setQueryData<DebateDetail>(
+        ["debates", debateId, "detail", accessToken],
+        (data) => data ? {
+          ...data,
+          status: "FINISHED",
+          currentStage: "FINAL_VERDICT",
+          winnerPosition: event.winnerPosition ?? null,
+          turnEndsAt: null,
+        } : data,
       );
     }
     queryClient.setQueryData<DebateHistories>(
@@ -505,7 +523,15 @@ export function DebateRoom({ debateId }: { debateId: string }) {
     submitMutation.mutate(statement);
   }, [scheduledContent, shouldFocusStatement, submitMutation]);
 
-  if (!isReady || (accessToken && debateQuery.isPending)) return <DebateRoomSkeleton />;
+  if (!isReady || (accessToken && debateQuery.isPending)) {
+    if (!finalView) return <DebateRoomSkeleton />;
+    return (
+      <div className="flex min-h-full flex-1 flex-col bg-[var(--page-bg)]">
+        <SiteHeader />
+        <DebateFinalVerdictSkeleton />
+      </div>
+    );
+  }
   if (!accessToken) return null;
 
   if (debateQuery.isError || !debateQuery.data || !entryAllowed) {
@@ -554,6 +580,7 @@ export function DebateRoom({ debateId }: { debateId: string }) {
   const histories = historiesQuery.data?.histories;
   const verdicts = historiesQuery.data?.verdicts;
   const currentVerdict = verdicts?.find((verdict) => verdict.stage === debate.currentStage);
+  const finalVerdict = verdicts?.find((verdict) => verdict.stage === "FINAL_VERDICT");
   const currentStageIndex = debateStages.indexOf(debate.currentStage);
   const timelineStages = currentStageIndex > 0 ? debateStages.slice(1, currentStageIndex + 1) : [];
   const hostProfileImageUrl = member?.myRole === "HOST" ? myProfileImageUrl : opponentProfileImageUrl;
@@ -605,6 +632,99 @@ export function DebateRoom({ debateId }: { debateId: string }) {
     }
     submitMutation.mutate(statement);
   };
+
+  if (debate.currentStage === "FINAL_VERDICT") {
+    const completedStages = timelineStages.filter((stage) => stage !== "FINAL_VERDICT");
+    const historyLoading = historiesQuery.isPending || freeMessagesQuery.isPending;
+
+    return (
+      <div className="flex min-h-full flex-1 flex-col bg-[var(--page-bg)]">
+        <SiteHeader />
+        <DebateFinalVerdict
+          title={debate.title}
+          verdict={finalVerdict}
+          myPosition={myPosition}
+          isLoading={historiesQuery.isPending || memberQuery.isPending}
+        >
+          <section className="rounded-3xl border border-[var(--line)] bg-white p-5 shadow-[0_12px_40px_rgba(16,24,40,0.06)] sm:p-7" aria-labelledby="completed-debate-history-title">
+            <div className="border-b border-[var(--line)] pb-4">
+              <h2 id="completed-debate-history-title" className="font-bold text-[var(--ink)]">지난 토론 내용</h2>
+              <p className="mt-1 text-xs text-[var(--ink-muted)]">토론 중 주고받은 발언과 판정을 시간순으로 확인할 수 있습니다.</p>
+            </div>
+            <div className="pt-6">
+              {historyLoading ? (
+                <DebateMessagesSkeleton label="지난 토론 내용 불러오는 중" />
+              ) : historiesQuery.isError && !historiesQuery.data ? (
+                <div className="py-10 text-center" role="alert">
+                  <p className="text-sm text-[var(--danger)]">지난 토론 내용을 불러오지 못했습니다.</p>
+                  <button className="mt-3 text-sm font-semibold text-[var(--brand-blue)] underline" type="button" onClick={() => void Promise.all([refetchHistories(), refetchFreeMessages()])}>다시 시도</button>
+                </div>
+              ) : (
+                <ol className="space-y-5">
+                  {completedStages.map((stage) => (
+                    <Fragment key={stage}>
+                      <StageNotice stage={stage} />
+                      {stage === "FREE" ? (
+                        <>
+                          {freeMessagesQuery.hasNextPage ? (
+                            <li className="text-center">
+                              <button
+                                type="button"
+                                className="text-xs font-semibold text-[var(--brand-blue)] underline disabled:opacity-50"
+                                disabled={freeMessagesQuery.isFetchingNextPage}
+                                onClick={() => void freeMessagesQuery.fetchNextPage()}
+                              >
+                                {freeMessagesQuery.isFetchingNextPage ? "이전 대화 불러오는 중…" : "이전 대화 더 보기"}
+                              </button>
+                            </li>
+                          ) : null}
+                          {freeMessagesQuery.isError ? (
+                            <li className="py-3 text-center text-sm text-[var(--danger)]" role="alert">
+                              <p>{freeMessagesQuery.error.message}</p>
+                              <button type="button" className="mt-2 underline" onClick={() => void refetchFreeMessages()}>대화 다시 불러오기</button>
+                            </li>
+                          ) : null}
+                          {!freeMessages.length && !freeMessagesQuery.isError ? (
+                            <li className="py-4 text-center text-sm text-[var(--ink-muted)]">자유 토론에서 주고받은 메시지가 없습니다.</li>
+                          ) : null}
+                          {freeMessages.map((message) => (
+                            <HistoryItem
+                              key={message.id}
+                              history={{ ...message, stage: "FREE" }}
+                              authorRole={message.role}
+                              hostPosition={debate.hostPosition}
+                              myPosition={myPosition}
+                              opponentName={opponentName}
+                              opponentProfileImageUrl={opponentProfileImageUrl}
+                            />
+                          ))}
+                        </>
+                      ) : null}
+                      {histories?.filter((history) => history.stage === stage).map((history) => (
+                        <HistoryItem
+                          key={history.id}
+                          history={history}
+                          hostPosition={debate.hostPosition}
+                          myPosition={myPosition}
+                          opponentName={opponentName}
+                          opponentProfileImageUrl={opponentProfileImageUrl}
+                        />
+                      ))}
+                      {verdicts?.filter((verdict) => verdict.stage === stage).map((verdict) => (
+                        <li key={`verdict-${verdict.id}`}>
+                          <DebateVerdictCard verdict={verdict} />
+                        </li>
+                      ))}
+                    </Fragment>
+                  ))}
+                </ol>
+              )}
+            </div>
+          </section>
+        </DebateFinalVerdict>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-[var(--page-bg)]">
@@ -739,10 +859,7 @@ export function DebateRoom({ debateId }: { debateId: string }) {
                 }}
               >
               {historiesQuery.isPending ? (
-                <div className="space-y-5 motion-safe:animate-pulse" aria-label="발언 내역 불러오는 중">
-                  <div className="h-20 w-4/5 rounded-2xl bg-slate-100" />
-                  <div className="ml-auto h-20 w-4/5 rounded-2xl bg-slate-200" />
-                </div>
+                <DebateMessagesSkeleton />
               ) : historiesQuery.isError && !historiesQuery.data ? (
                 <div className="py-12 text-center" role="alert">
                   <p className="text-sm text-[var(--danger)]">{historiesQuery.error instanceof Error ? historiesQuery.error.message : "발언과 판결을 불러오지 못했습니다."}</p>
