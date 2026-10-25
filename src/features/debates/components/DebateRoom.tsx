@@ -37,7 +37,7 @@ import {
 import { detectNewMessage } from "@/features/debates/debateMessages";
 import { canSendFreeMessage, mergeFreeMessages } from "@/features/debates/freeDebateMessages";
 import { useDebatePresence } from "@/features/debates/hooks/useDebatePresence";
-import { mergeDebateHistoriesEvent, type PresenceStatus } from "@/features/debates/presenceEvents";
+import { mergeDebateHistoriesEvent, shouldNotifyEarlyEndDeclined, type DebateConnectionEvent, type DebateEarlyEndAction, type PresenceStatus } from "@/features/debates/presenceEvents";
 import { awaitingVerdictStage, canSubmitStatement } from "@/features/debates/debateVerdict";
 import { getProfileImageViewUrl } from "@/features/mypage/api/getMyProfile";
 import { ProfileAvatar } from "@/features/mypage/components/ProfileAvatar";
@@ -240,6 +240,9 @@ export function DebateRoom({ debateId }: { debateId: string }) {
   const [showFloatingProgress, setShowFloatingProgress] = useState(false);
   const [newMessagePreview, setNewMessagePreview] = useState<string | null>(null);
   const [exitOpen, setExitOpen] = useState(false);
+  const [earlyEndOpen, setEarlyEndOpen] = useState(false);
+  const [earlyEndError, setEarlyEndError] = useState("");
+  const [earlyEndDeclinedOpen, setEarlyEndDeclinedOpen] = useState(false);
 
   const debateQuery = useQuery({
     queryKey: ["debates", debateId, "detail", accessToken],
@@ -319,6 +322,23 @@ export function DebateRoom({ debateId }: { debateId: string }) {
     },
   });
 
+  const earlyEndMutation = useMutation({
+    mutationFn: (action: DebateEarlyEndAction) => presence.sendEarlyEndAction(action),
+    onError: (error) => {
+      setEarlyEndError(error instanceof Error ? error.message : "조기 종료 요청을 처리하지 못했습니다.");
+      void presence.refreshEarlyEnd().catch(() => {});
+    },
+  });
+
+  const submitEarlyEndAction = (action: DebateEarlyEndAction) => {
+    setEarlyEndError("");
+    earlyEndMutation.mutate(action, {
+      onSuccess: () => {
+        if (action !== "propose") setEarlyEndOpen(false);
+      },
+    });
+  };
+
   const submitMutation = useMutation({
     mutationFn: (statement: string) => submitDebateHistory(debateId, statement, accessToken!),
     onSuccess: (history) => {
@@ -379,10 +399,45 @@ export function DebateRoom({ debateId }: { debateId: string }) {
   }, [accessToken, debateId, presence.latestProgressEvent, queryClient, refetchDebate, refetchHistories]);
 
   useEffect(() => {
-    if (!debateQuery.data?.turnEndsAt) return;
+    if (!debateQuery.data?.turnEndsAt && !presence.earlyEnd.expiresAt) return;
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
-  }, [debateQuery.data?.turnEndsAt]);
+  }, [debateQuery.data?.turnEndsAt, presence.earlyEnd.expiresAt]);
+
+  const activeEarlyEnd = useRef<string | null>(null);
+  const announcedEarlyEnd = useRef<string | null>(null);
+  const handledEarlyEndDecline = useRef<DebateConnectionEvent | null>(null);
+  useEffect(() => {
+    const key = presence.earlyEnd.pending
+      ? `${presence.earlyEnd.proposerRole}:${presence.earlyEnd.expiresAt}`
+      : null;
+    const previous = activeEarlyEnd.current;
+    activeEarlyEnd.current = key;
+    let update: (() => void) | null = null;
+    if (previous && !key) {
+      announcedEarlyEnd.current = null;
+      update = () => {
+        setEarlyEndOpen(false);
+        setEarlyEndError("");
+      };
+    } else if (key && announcedEarlyEnd.current !== key && memberQuery.data
+      && presence.earlyEnd.proposerRole !== memberQuery.data.myRole) {
+      announcedEarlyEnd.current = key;
+      update = () => setEarlyEndOpen(true);
+    }
+    if (!update) return;
+    const frame = requestAnimationFrame(update);
+    return () => cancelAnimationFrame(frame);
+  }, [memberQuery.data, presence.earlyEnd.expiresAt, presence.earlyEnd.pending, presence.earlyEnd.proposerRole]);
+
+  useEffect(() => {
+    const event = presence.latestEarlyEndEvent;
+    if (!shouldNotifyEarlyEndDeclined(event, memberQuery.data?.myRole)
+      || handledEarlyEndDecline.current === event) return;
+    handledEarlyEndDecline.current = event;
+    const frame = requestAnimationFrame(() => setEarlyEndDeclinedOpen(true));
+    return () => cancelAnimationFrame(frame);
+  }, [memberQuery.data?.myRole, presence.latestEarlyEndEvent]);
 
   useEffect(() => {
     const turnEndsAt = debateQuery.data?.turnEndsAt;
@@ -473,6 +528,18 @@ export function DebateRoom({ debateId }: { debateId: string }) {
   const started = presence.started || debate.status === "IN_PROGRESS";
   const isFreeDebate = debate.currentStage === "FREE";
   const remainingSeconds = remainingTurnSeconds(debate.turnEndsAt, now);
+  const earlyEndServerRemainingSeconds = remainingTurnSeconds(presence.earlyEnd.expiresAt, now);
+  const earlyEndRemainingSeconds = earlyEndServerRemainingSeconds === null
+    ? null
+    : Math.min(30, earlyEndServerRemainingSeconds);
+  const earlyEndProposedByMe = presence.earlyEnd.pending
+    && presence.earlyEnd.proposerRole === member?.myRole;
+  const earlyEndButtonLabel = presence.earlyEnd.pending
+    ? `${earlyEndProposedByMe ? "응답 대기" : "조기 종료 요청"} ${formatTurnTime(earlyEndRemainingSeconds)}`
+    : "조기 종료 제안";
+  const floatingEarlyEndLabel = presence.earlyEnd.pending
+    ? `${earlyEndProposedByMe ? "대기" : "응답"} ${formatTurnTime(earlyEndRemainingSeconds)}`
+    : "종료 제안";
   const isMyTurn = started && !isFreeDebate && Boolean(currentSpeaker && currentSpeaker === myPosition);
   const canCompose = isFreeDebate ? canChat : started && Boolean(member) && Boolean(currentSpeaker) && !scheduledContent;
   const isPrewriting = canCompose && !isFreeDebate && !isMyTurn;
@@ -543,16 +610,31 @@ export function DebateRoom({ debateId }: { debateId: string }) {
     <div className="flex min-h-full flex-1 flex-col bg-[var(--page-bg)]">
       <SiteHeader />
       {showFloatingProgress ? (
-        <div className="pointer-events-none fixed inset-x-0 top-4 z-50 flex justify-center px-3" aria-hidden="true">
-          <div className="flex max-w-full items-center gap-3 rounded-full border border-[var(--line)] bg-white/95 px-5 py-3 shadow-[0_12px_34px_rgba(15,23,42,0.2)] backdrop-blur">
+        <div className="pointer-events-none fixed inset-x-0 top-4 z-50 flex justify-center px-3">
+          <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-[var(--line)] bg-white/95 px-3 py-2 shadow-[0_12px_34px_rgba(15,23,42,0.2)] backdrop-blur sm:gap-3 sm:px-5 sm:py-3">
             <span className="max-w-32 truncate text-sm font-bold text-[var(--ink)] sm:max-w-none">{debateStageLabels[debate.currentStage]}</span>
             <span className="h-5 w-px bg-[var(--line)]" />
             <span className={`font-mono text-lg font-bold ${remainingSeconds === 0 ? "text-[var(--danger)]" : "text-[var(--ink)]"}`}>
               {formatTurnTime(remainingSeconds)}
             </span>
-            <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${isMyTurn ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600"}`}>
-              {turnStatusLabel}
-            </span>
+            {isFreeDebate ? (
+              <button
+                type="button"
+                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold transition ${presence.earlyEnd.pending && !earlyEndProposedByMe
+                  ? "bg-[var(--brand-blue)] text-white hover:bg-[var(--btn-primary-hover)]"
+                  : "bg-blue-50 text-blue-700 hover:bg-blue-100"}`}
+                onClick={() => {
+                  setEarlyEndError("");
+                  setEarlyEndOpen(true);
+                }}
+              >
+                {floatingEarlyEndLabel}
+              </button>
+            ) : (
+              <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${isMyTurn ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600"}`}>
+                {turnStatusLabel}
+              </span>
+            )}
           </div>
         </div>
       ) : null}
@@ -603,7 +685,15 @@ export function DebateRoom({ debateId }: { debateId: string }) {
             </p>
           )}
 
-          <div className="mt-4 border-t border-[var(--line)] pt-4">
+          <div className={`mt-4 grid gap-2 border-t border-[var(--line)] pt-4 ${isFreeDebate ? "grid-cols-2" : ""}`}>
+            {isFreeDebate ? (
+              <Button variant="outline" className="!h-10" onClick={() => {
+                setEarlyEndError("");
+                setEarlyEndOpen(true);
+              }}>
+                {earlyEndButtonLabel}
+              </Button>
+            ) : null}
             <Button variant="outline" className="!h-10" onClick={() => setExitOpen(true)}>
               나가기
             </Button>
@@ -844,7 +934,19 @@ export function DebateRoom({ debateId }: { debateId: string }) {
                   </p>
                 </div>
               ) : null}
-              <div className="mt-5 border-t border-[var(--line)] pt-5">
+              <div className="mt-5 space-y-2 border-t border-[var(--line)] pt-5">
+                {isFreeDebate ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEarlyEndError("");
+                      setEarlyEndOpen(true);
+                    }}
+                    className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-[var(--line)] bg-white px-3 text-sm font-semibold text-[var(--ink)] hover:bg-[var(--surface-muted)]"
+                  >
+                    {earlyEndButtonLabel}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => setExitOpen(true)}
@@ -869,6 +971,84 @@ export function DebateRoom({ debateId }: { debateId: string }) {
             나가기
           </Link>
         </div>
+      </Modal>
+      <Modal
+        open={earlyEndOpen && isFreeDebate}
+        title={presence.earlyEnd.pending
+          ? earlyEndProposedByMe ? "상대방의 응답을 기다리고 있습니다" : "상대방이 조기 종료를 제안했습니다"
+          : "자유 토론을 조기 종료할까요?"}
+        onClose={() => !earlyEndMutation.isPending && setEarlyEndOpen(false)}
+      >
+        {presence.earlyEnd.pending ? (
+          <>
+            <p className="text-center">
+              {earlyEndProposedByMe
+                ? "상대방이 수락하면 자유 토론을 종료하고 최종 판정을 진행합니다."
+                : "수락하면 자유 토론을 종료하고 바로 최종 판정을 진행합니다."}
+            </p>
+            <p className="mt-4 text-center font-mono text-3xl font-bold text-[var(--ink)]" aria-live="polite">
+              {formatTurnTime(earlyEndRemainingSeconds)}
+            </p>
+            <p className="mt-1 text-center text-xs">남은 응답 시간</p>
+            {earlyEndError ? <p className="mt-4 text-center text-xs font-semibold text-[var(--danger)]" role="alert">{earlyEndError}</p> : null}
+            <div className="mt-6 flex gap-3">
+              {earlyEndProposedByMe ? (
+                <Button
+                  variant="outline"
+                  loading={earlyEndMutation.isPending}
+                  disabled={presence.connectionStatus !== "connected"}
+                  onClick={() => submitEarlyEndAction("cancel")}
+                >
+                  제안 취소
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    variant="outline"
+                    loading={earlyEndMutation.isPending && earlyEndMutation.variables === "decline"}
+                    disabled={presence.connectionStatus !== "connected" || earlyEndMutation.isPending}
+                    onClick={() => submitEarlyEndAction("decline")}
+                  >
+                    거절
+                  </Button>
+                  <Button
+                    loading={earlyEndMutation.isPending && earlyEndMutation.variables === "accept"}
+                    disabled={presence.connectionStatus !== "connected" || earlyEndMutation.isPending}
+                    onClick={() => submitEarlyEndAction("accept")}
+                  >
+                    수락
+                  </Button>
+                </>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-center">
+              상대방이 수락하면 남은 시간과 관계없이 자유 토론을 종료하고 최종 판정을 진행합니다.
+              제안은 30초 후 자동으로 만료됩니다.
+            </p>
+            {earlyEndError ? <p className="mt-4 text-center text-xs font-semibold text-[var(--danger)]" role="alert">{earlyEndError}</p> : null}
+            <div className="mt-6 flex gap-3">
+              <Button variant="outline" disabled={earlyEndMutation.isPending} onClick={() => setEarlyEndOpen(false)}>계속 토론하기</Button>
+              <Button
+                loading={earlyEndMutation.isPending}
+                disabled={presence.connectionStatus !== "connected"}
+                onClick={() => submitEarlyEndAction("propose")}
+              >
+                조기 종료 제안
+              </Button>
+            </div>
+          </>
+        )}
+      </Modal>
+      <Modal
+        open={earlyEndDeclinedOpen}
+        title="조기 종료 제안이 거절되었습니다"
+        onClose={() => setEarlyEndDeclinedOpen(false)}
+      >
+        <p className="text-center">상대방이 조기 종료 제안을 거절했습니다.<br />자유 토론을 계속 진행해주세요.</p>
+        <Button className="mt-6" onClick={() => setEarlyEndDeclinedOpen(false)}>확인</Button>
       </Modal>
     </div>
   );
