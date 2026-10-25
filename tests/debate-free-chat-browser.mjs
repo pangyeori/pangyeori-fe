@@ -29,6 +29,15 @@ try {
     pending.set(++id, { resolve, reject });
     ws.send(JSON.stringify({ id, method, params }));
   });
+  const waitForEvent = (method) => new Promise((resolve) => {
+    const listener = ({ data: raw }) => {
+      const message = JSON.parse(raw);
+      if (message.method !== method) return;
+      ws.removeEventListener("message", listener);
+      resolve(message.params);
+    };
+    ws.addEventListener("message", listener);
+  });
   const evaluate = async (expression) => {
     const result = await call("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true });
     assert.equal(result.exceptionDetails, undefined);
@@ -69,6 +78,7 @@ try {
     else if (path === "/api/v1/users/me/term-agreements/pending") result = [];
     else if (path === "/api/v1/debates/free-test") result = debate;
     else if (path === "/api/v1/debates/free-test/presence") result = { hostConnected: true, guestConnected: true };
+    else if (path === "/api/v1/debates/free-test/early-end") result = { pending: false, proposerRole: null, expiresAt: null };
     else if (path === "/api/v1/debates/me") result = { items: [{ ...debate, debateId: debate.id, myRole, myPosition: myRole === "HOST" ? "CONS" : "PROS", opponent: { userId: "other", nickname: "상대", profileImageKey: null } }], hasNext: false, nextCursor: null };
     else if (path === "/api/v1/users/me") result = { id: "me", nickname: "테스터", email: "test@example.invalid", profileImageKey: null };
     else if (path === "/api/v1/notifications/unread-count") result = { count: 0 };
@@ -209,7 +219,9 @@ try {
   await call("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   assert.equal(await evaluate("document.documentElement.scrollWidth <= window.innerWidth"), true, "mobile has no horizontal overflow");
   myRole = "GUEST";
+  const reloaded = waitForEvent("Page.loadEventFired");
   await call("Page.reload");
+  await reloaded;
   await until("document.querySelector('#debate-statement') && !document.querySelector('#debate-statement').disabled");
   await evaluate("window.testRole = 'GUEST'; window.sequence = 4000");
   await enter("게스트도 자유 발언");
@@ -219,8 +231,8 @@ try {
   messages.push(...await evaluate("window.ackMessages"));
   debate.turnEndsAt = new Date(Date.now() + 1500).toISOString();
   await evaluate(`window.chatSocket.event('/sub/debates/free-test', ${JSON.stringify({ debateId: debate.id, type: "STAGE_CHANGED", role: null, stage: "FREE", turnEndsAt: debate.turnEndsAt })})`);
-  await until("document.querySelector('#debate-statement').disabled");
-  await until("document.querySelector('[aria-current=step]')?.textContent.includes('최종 판정')");
+  await until("document.querySelector('#debate-statement') === null");
+  await until(contains("판겨리 AI가 토론을 분석하고 있습니다"));
   assert.equal(await evaluate(contains("게스트도 자유 발언")), true, "messages remain after FREE ends");
   assert.equal(statementPosts, 0, "free chat never posts a statement");
   assert.deepEqual(errors, []);

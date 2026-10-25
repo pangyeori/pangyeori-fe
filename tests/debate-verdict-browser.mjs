@@ -162,8 +162,8 @@ try {
   await call("Page.reload");
   await until("document.body?.innerText.includes('찬성 측 승리')");
   assert.equal(await evaluate("document.body.innerText.includes('토론에서 승리했습니다')"), true);
-  assert.equal(await evaluate("document.body.innerText.includes('62.5점')"), true);
-  assert.equal(await evaluate("document.body.innerText.includes('37.5점')"), true);
+  assert.equal(await evaluate("document.body.innerText.includes('62.5점')"), false, "final verdict hides scores");
+  assert.equal(await evaluate("document.body.innerText.includes('37.5점')"), false, "final verdict hides scores");
   assert.equal(await evaluate("document.body.innerText.includes('최종 판결 근거')"), true);
   assert.equal(await evaluate("document.body.innerText.includes('지난 토론 내용')"), true);
   assert.equal(await evaluate("document.body.innerText.includes('자유 토론 찬성 발언')"), true);
