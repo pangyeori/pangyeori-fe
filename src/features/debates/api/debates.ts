@@ -40,6 +40,12 @@ export type DebatePresenceSnapshot = {
   guestConnected: boolean;
 };
 
+export type DebateEarlyEndStatus = {
+  pending: boolean;
+  proposerRole: DebateRole | null;
+  expiresAt: string | null;
+};
+
 export type Invitation = {
   debateId: string;
   title: string;
@@ -162,6 +168,10 @@ export function getDebate(debateId: string, token: string) {
 
 export function getDebatePresence(debateId: string, token: string) {
   return apiClient<DebatePresenceSnapshot>(`/api/v1/debates/${encodeURIComponent(debateId)}/presence`, { token });
+}
+
+export function getDebateEarlyEndStatus(debateId: string, token: string) {
+  return apiClient<DebateEarlyEndStatus>(`/api/v1/debates/${encodeURIComponent(debateId)}/early-end`, { token });
 }
 
 export function getDebateHistories(debateId: string, token: string) {
