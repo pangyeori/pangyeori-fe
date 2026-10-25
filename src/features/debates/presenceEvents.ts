@@ -1,4 +1,4 @@
-import type { DebateHistories, DebateHistory, DebatePresenceSnapshot, DebateRole, DebateStage, DebateVerdictStatus, WinnerPosition } from "@/features/debates/api/debates";
+import type { DebateEarlyEndStatus, DebateHistories, DebateHistory, DebatePresenceSnapshot, DebateRole, DebateStage, DebateVerdictStatus, WinnerPosition } from "@/features/debates/api/debates";
 
 const debateStages: DebateStage[] = [
   "NONE",
@@ -20,7 +20,13 @@ export type DebateConnectionEventType =
   | "STATEMENT_SUBMITTED"
   | "STATEMENT_TIMED_OUT"
   | "FREE_MESSAGE_SENT"
-  | "VERDICT_ISSUED";
+  | "VERDICT_ISSUED"
+  | "EARLY_END_PROPOSED"
+  | "EARLY_END_ACCEPTED"
+  | "EARLY_END_DECLINED"
+  | "EARLY_END_CANCELLED"
+  | "EARLY_END_EXPIRED"
+  | "DEBATE_ENDED";
 
 export type DebateConnectionEvent = {
   debateId: string;
@@ -34,6 +40,17 @@ export type DebateConnectionEvent = {
   winnerPosition?: WinnerPosition | null;
   reasoning?: string | null;
   messageId?: string | null;
+  expiresAt?: string | null;
+  participantProsScore?: number | null;
+  participantConsScore?: number | null;
+};
+
+export type DebateEarlyEndAction = "propose" | "accept" | "decline" | "cancel";
+
+export const initialDebateEarlyEnd: DebateEarlyEndStatus = {
+  pending: false,
+  proposerRole: null,
+  expiresAt: null,
 };
 
 export type PresenceStatus = "unknown" | "entered" | "reconnecting" | "left";
@@ -78,6 +95,12 @@ export function parseDebateConnectionEvent(raw: string, debateId: string): Debat
       "STATEMENT_TIMED_OUT",
       "VERDICT_ISSUED",
       "FREE_MESSAGE_SENT",
+      "EARLY_END_PROPOSED",
+      "EARLY_END_ACCEPTED",
+      "EARLY_END_DECLINED",
+      "EARLY_END_CANCELLED",
+      "EARLY_END_EXPIRED",
+      "DEBATE_ENDED",
     ].includes(type)) return null;
     if (type === "FREE_MESSAGE_SENT") {
       if ((value.role !== "HOST" && value.role !== "GUEST")
@@ -96,11 +119,31 @@ export function parseDebateConnectionEvent(raw: string, debateId: string): Debat
         && (!["PROS", "CONS", "DRAW"].includes(String(value.winnerPosition)) || typeof value.reasoning !== "string")) return null;
       if (value.verdictStatus === "FAILED"
         && (value.winnerPosition != null || value.reasoning != null)) return null;
+      if (value.stage === "FINAL_VERDICT" && value.verdictStatus === "SUCCESS") {
+        const pros = value.participantProsScore;
+        const cons = value.participantConsScore;
+        if (typeof pros !== "number" || typeof cons !== "number"
+          || !Number.isFinite(pros) || !Number.isFinite(cons)
+          || pros < 0 || cons < 0 || Math.abs(pros + cons - 100) > 0.001) return null;
+      }
+    }
+    if (type === "DEBATE_ENDED") {
+      if (value.stage !== "FINAL_VERDICT"
+        || (value.verdictStatus !== "SUCCESS" && value.verdictStatus !== "FAILED")) return null;
+      if (value.verdictStatus === "SUCCESS" && !["PROS", "CONS", "DRAW"].includes(String(value.winnerPosition))) return null;
+      if (value.verdictStatus === "FAILED" && value.winnerPosition != null) return null;
     }
     if (type === "STATEMENT_SUBMITTED" && typeof value.content !== "string") return null;
     if (["STATEMENT_SUBMITTED", "STATEMENT_TIMED_OUT"].includes(type)
       && (typeof value.submittedAt !== "string" || !Number.isFinite(Date.parse(value.submittedAt)))) return null;
     if (type === "STAGE_CHANGED" && value.turnEndsAt !== null && typeof value.turnEndsAt !== "string") return null;
+    if (type.startsWith("EARLY_END_")) {
+      if (value.role !== "HOST" && value.role !== "GUEST") return null;
+      if (type === "EARLY_END_PROPOSED"
+        && (typeof value.expiresAt !== "string" || !Number.isFinite(Date.parse(
+          value.expiresAt + (/(?:Z|[+-]\d{2}:\d{2})$/i.test(value.expiresAt) ? "" : "Z"),
+        )))) return null;
+    }
     return value as DebateConnectionEvent;
   } catch {
     return null;
@@ -111,7 +154,7 @@ export function applyDebateConnectionEvent(
   current: DebatePresence,
   event: DebateConnectionEvent,
 ): DebatePresence {
-  if (isDebateProgressEvent(event) || event.type === "FREE_MESSAGE_SENT") return current;
+  if (isDebateProgressEvent(event) || isDebateEarlyEndEvent(event) || event.type === "FREE_MESSAGE_SENT") return current;
   if (event.type === "STARTED") {
     return {
       roles: { HOST: "entered", GUEST: "entered" },
@@ -133,7 +176,29 @@ export function isDebateProgressEvent(event: DebateConnectionEvent) {
   return event.type === "STAGE_CHANGED"
     || event.type === "STATEMENT_SUBMITTED"
     || event.type === "STATEMENT_TIMED_OUT"
-    || event.type === "VERDICT_ISSUED";
+    || event.type === "VERDICT_ISSUED"
+    || event.type === "DEBATE_ENDED";
+}
+
+export function isDebateEarlyEndEvent(event: DebateConnectionEvent) {
+  return event.type.startsWith("EARLY_END_");
+}
+
+export function shouldNotifyEarlyEndDeclined(
+  event: DebateConnectionEvent | null,
+  myRole: DebateRole | undefined,
+) {
+  return event?.type === "EARLY_END_DECLINED" && Boolean(myRole && event.role !== myRole);
+}
+
+export function applyDebateEarlyEndEvent(
+  current: DebateEarlyEndStatus,
+  event: DebateConnectionEvent,
+): DebateEarlyEndStatus {
+  if (event.type === "EARLY_END_PROPOSED") {
+    return { pending: true, proposerRole: event.role, expiresAt: event.expiresAt! };
+  }
+  return isDebateEarlyEndEvent(event) ? initialDebateEarlyEnd : current;
 }
 
 export function mergeDebateHistoriesEvent(

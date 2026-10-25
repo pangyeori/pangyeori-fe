@@ -40,11 +40,18 @@ export type DebatePresenceSnapshot = {
   guestConnected: boolean;
 };
 
+export type DebateEarlyEndStatus = {
+  pending: boolean;
+  proposerRole: DebateRole | null;
+  expiresAt: string | null;
+};
+
 export type Invitation = {
   debateId: string;
   title: string;
   description: string | null;
   hostNickname: string;
+  hostProfileImageKey?: string | null;
   guestPosition: Position;
   debateStatus: string;
   guestStatus: GuestStatus;
@@ -77,6 +84,7 @@ export type DebateDetail = {
   turnTimeSeconds: number;
   freeDebateTimeSeconds: number;
   inviteToken: string | null;
+  winnerPosition: WinnerPosition | null;
 };
 
 export type MyDebate = {
@@ -114,6 +122,8 @@ export type DebateVerdict = {
   winnerPosition: WinnerPosition | null;
   reasoning: string | null;
   createdAt: string;
+  participantProsScore: number | null;
+  participantConsScore: number | null;
 };
 
 export type DebateHistories = {
@@ -164,6 +174,10 @@ export function getDebatePresence(debateId: string, token: string) {
   return apiClient<DebatePresenceSnapshot>(`/api/v1/debates/${encodeURIComponent(debateId)}/presence`, { token });
 }
 
+export function getDebateEarlyEndStatus(debateId: string, token: string) {
+  return apiClient<DebateEarlyEndStatus>(`/api/v1/debates/${encodeURIComponent(debateId)}/early-end`, { token });
+}
+
 export function getDebateHistories(debateId: string, token: string) {
   return apiClient<DebateHistories>(`/api/v1/debates/${encodeURIComponent(debateId)}/histories`, { token });
 }
@@ -192,7 +206,7 @@ export async function getMyDebate(debateId: string, token: string) {
   let cursor: string | null = null;
   do {
     const page = await getMyDebates(token, cursor, {
-      status: ["READY", "IN_PROGRESS"],
+      status: ["READY", "IN_PROGRESS", "FINISHED"],
       pageSize: 50,
     });
     const debate = page.items.find((item) => item.debateId === debateId);

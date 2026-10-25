@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { debateStatusLabel, fetchRemainingDebatePages, isPastDebate } from "./debateList.ts";
+import { canReviewDebate, debateOutcome, debateStatusLabel, fetchRemainingDebatePages, isPastDebate } from "./debateList.ts";
 import { isHostInvitation } from "./roomSession.ts";
 
 test("debates are split into active and past sections with user-facing badges", () => {
@@ -12,6 +12,15 @@ test("debates are split into active and past sections with user-facing badges", 
   }
   assert.equal(isPastDebate("FINISHED"), true);
   assert.equal(isPastDebate("CANCELLED"), true);
+  assert.equal(canReviewDebate("FINISHED"), true);
+  assert.equal(canReviewDebate("CANCELLED"), false);
+});
+
+test("finished debates show the result from the user's position", () => {
+  assert.equal(debateOutcome("PROS", "PROS"), "승리");
+  assert.equal(debateOutcome("CONS", "PROS"), "패배");
+  assert.equal(debateOutcome("CONS", "DRAW"), "무승부");
+  assert.equal(debateOutcome("PROS", null), null);
 });
 
 test("expanding a section fetches every remaining cursor page", async () => {
