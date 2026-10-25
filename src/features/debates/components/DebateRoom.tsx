@@ -36,7 +36,7 @@ import {
   speakingPosition,
 } from "@/features/debates/debateProgress";
 import { detectNewMessage } from "@/features/debates/debateMessages";
-import { canSendFreeMessage, mergeFreeMessages } from "@/features/debates/freeDebateMessages";
+import { canSendFreeMessage, groupFreeMessages, mergeFreeMessages } from "@/features/debates/freeDebateMessages";
 import { useDebatePresence } from "@/features/debates/hooks/useDebatePresence";
 import { mergeDebateHistoriesEvent, shouldNotifyEarlyEndDeclined, type DebateConnectionEvent, type DebateEarlyEndAction, type PresenceStatus } from "@/features/debates/presenceEvents";
 import { awaitingVerdictStage, canSubmitStatement } from "@/features/debates/debateVerdict";
@@ -186,13 +186,15 @@ function ParticipantCard({ role, position, status, name, profileImageUrl }: {
   );
 }
 
-function HistoryItem({ history, hostPosition, myPosition, opponentName, opponentProfileImageUrl, authorRole }: {
+function HistoryItem({ history, hostPosition, myPosition, opponentName, opponentProfileImageUrl, authorRole, showAuthor = true, showTime = true }: {
   history: DebateHistory;
   hostPosition: Position;
   myPosition: Position | undefined;
   opponentName: string;
   opponentProfileImageUrl: string | null;
   authorRole?: DebateRole;
+  showAuthor?: boolean;
+  showTime?: boolean;
 }) {
   const position = authorRole
     ? authorRole === "HOST" ? hostPosition : hostPosition === "PROS" ? "CONS" : "PROS"
@@ -204,27 +206,36 @@ function HistoryItem({ history, hostPosition, myPosition, opponentName, opponent
   const messageDateTime = formatMessageDateTime(submittedAt);
 
   return (
-    <li className={`flex items-start gap-2 ${mine ? "justify-end" : "justify-start"}`}>
-      {!mine ? <ProfileAvatar key={opponentProfileImageUrl ?? "fallback"} nickname={opponentName} profileImageUrl={opponentProfileImageUrl} className="mt-6 h-12 w-12" /> : null}
+    <li className={`flex items-start gap-2 ${mine ? "justify-end" : "justify-start"} ${showAuthor ? "" : "!mt-1"}`}>
+      {!mine ? showAuthor
+        ? <ProfileAvatar key={opponentProfileImageUrl ?? "fallback"} nickname={opponentName} profileImageUrl={opponentProfileImageUrl} className="mt-6 h-12 w-12" />
+        : <span className="w-12 shrink-0" aria-hidden />
+      : null}
       <div className={`flex max-w-[82%] flex-col sm:max-w-[78%] ${mine ? "items-end" : "items-start"}`}>
-        <div className={`mb-1 flex items-center gap-1.5 ${mine ? "justify-end" : "justify-start"}`}>
-          {!mine ? <span className="max-w-28 truncate text-xs font-semibold text-[var(--ink-muted)]">{opponentName}</span> : null}
-          {role === "HOST" ? <HostMark /> : null}
-          {position ? <PositionBadge position={position} /> : null}
-        </div>
-        <article className={`flex min-h-12 items-center rounded-2xl px-4 py-3 ${mine ? "rounded-br-md bg-[var(--brand-blue)] text-white" : "rounded-bl-md bg-slate-100 text-[var(--ink)]"}`}>
+        {showAuthor ? (
+          <div className={`mb-1 flex items-center gap-1.5 ${mine ? "justify-end" : "justify-start"}`}>
+            {!mine ? <span className="max-w-28 truncate text-xs font-semibold text-[var(--ink-muted)]">{opponentName}</span> : null}
+            {role === "HOST" ? <HostMark /> : null}
+            {position ? <PositionBadge position={position} /> : null}
+          </div>
+        ) : null}
+        <article className={`flex min-h-12 items-center rounded-3xl px-4 py-3 ${mine
+          ? `${showAuthor ? "rounded-br-sm" : ""} bg-[var(--brand-blue)] text-white`
+          : `${showAuthor ? "rounded-bl-sm" : ""} bg-slate-100 text-[var(--ink)]`}`}>
           <p className={`whitespace-pre-wrap break-words text-sm leading-6 ${history.content === null ? "italic opacity-75" : ""}`}>
             {history.content ?? "제한 시간 내에 발언하지 않았습니다."}
           </p>
         </article>
-        <time
-          className="mt-1 self-start text-[10px] text-[var(--ink-faint)] sm:text-xs"
-          dateTime={history.createdAt}
-          title={messageDateTime}
-          aria-label={messageDateTime}
-        >
-          {messageTime}
-        </time>
+        {showTime ? (
+          <time
+            className={`mt-1 text-[10px] text-[var(--ink-faint)] sm:text-xs ${mine ? "self-end" : "self-start"}`}
+            dateTime={history.createdAt}
+            title={messageDateTime}
+            aria-label={messageDateTime}
+          >
+            {messageTime}
+          </time>
+        ) : null}
       </div>
     </li>
   );
@@ -298,6 +309,7 @@ export function DebateRoom({ debateId, finalView = false }: { debateId: string; 
     freeMessagesQuery.data?.pages.flatMap((page) => page.items) ?? [],
     presence.freeMessages,
   ), [freeMessagesQuery.data, presence.freeMessages]);
+  const groupedFreeMessages = useMemo(() => groupFreeMessages(freeMessages), [freeMessages]);
   const syncedConnection = useRef(0);
   const recoveredDeadline = useRef<string | null>(null);
   const scheduledSubmissionInFlight = useRef(false);
@@ -660,7 +672,7 @@ export function DebateRoom({ debateId, finalView = false }: { debateId: string; 
                   <button className="mt-3 text-sm font-semibold text-[var(--brand-blue)] underline" type="button" onClick={() => void Promise.all([refetchHistories(), refetchFreeMessages()])}>다시 시도</button>
                 </div>
               ) : (
-                <ol className="space-y-5">
+                <ol className="space-y-1">
                   {completedStages.map((stage) => (
                     <Fragment key={stage}>
                       <StageNotice stage={stage} />
@@ -687,7 +699,7 @@ export function DebateRoom({ debateId, finalView = false }: { debateId: string; 
                           {!freeMessages.length && !freeMessagesQuery.isError ? (
                             <li className="py-4 text-center text-sm text-[var(--ink-muted)]">자유 토론에서 주고받은 메시지가 없습니다.</li>
                           ) : null}
-                          {freeMessages.map((message) => (
+                          {groupedFreeMessages.map(({ message, startsGroup, endsGroup }) => (
                             <HistoryItem
                               key={message.id}
                               history={{ ...message, stage: "FREE" }}
@@ -696,6 +708,8 @@ export function DebateRoom({ debateId, finalView = false }: { debateId: string; 
                               myPosition={myPosition}
                               opponentName={opponentName}
                               opponentProfileImageUrl={opponentProfileImageUrl}
+                              showAuthor={startsGroup}
+                              showTime={endsGroup}
                             />
                           ))}
                         </>
@@ -908,7 +922,7 @@ export function DebateRoom({ debateId, finalView = false }: { debateId: string; 
                               )}>대화 다시 불러오기</button>
                             </li>
                           ) : null}
-                          {freeMessages.map((message) => (
+                          {groupedFreeMessages.map(({ message, startsGroup, endsGroup }) => (
                             <HistoryItem
                               key={message.id}
                               history={{ ...message, stage: "FREE" }}
@@ -917,6 +931,8 @@ export function DebateRoom({ debateId, finalView = false }: { debateId: string; 
                               myPosition={myPosition}
                               opponentName={opponentName}
                               opponentProfileImageUrl={opponentProfileImageUrl}
+                              showAuthor={startsGroup}
+                              showTime={endsGroup}
                             />
                           ))}
                         </>
@@ -961,8 +977,14 @@ export function DebateRoom({ debateId, finalView = false }: { debateId: string; 
                             type="button"
                             disabled={submitMutation.isPending}
                             onClick={() => {
+                              setContent(scheduledContent);
                               setScheduledContent("");
                               scheduledSubmissionInFlight.current = false;
+                              requestAnimationFrame(() => {
+                                if (!statementInput.current) return;
+                                resizeStatementInput(statementInput.current);
+                                statementInput.current.focus();
+                              });
                             }}
                           >
                             취소하기
