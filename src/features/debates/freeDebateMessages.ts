@@ -6,6 +6,14 @@ export function mergeFreeMessages(...groups: DebateFreeMessage[][]): DebateFreeM
   return [...messages.values()].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 }
 
+export function groupFreeMessages(messages: DebateFreeMessage[]) {
+  return messages.map((message, index) => ({
+    message,
+    startsGroup: messages[index - 1]?.role !== message.role,
+    endsGroup: messages[index + 1]?.role !== message.role,
+  }));
+}
+
 export function freeMessageError(raw: string): string {
   try {
     const error = JSON.parse(raw);

@@ -44,23 +44,6 @@ export function DebateVerdictPendingCard({ stage, isFetching, onRetry }: {
 export function DebateVerdictCard({ verdict }: { verdict: DebateVerdict }) {
   const failed = verdict.status === "FAILED";
   const reasoning = verdict.reasoning?.trim() ?? "";
-  const [visibleReasoning, setVisibleReasoning] = useState("");
-
-  useEffect(() => {
-    if (!reasoning) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      const frame = window.requestAnimationFrame(() => setVisibleReasoning(reasoning));
-      return () => window.cancelAnimationFrame(frame);
-    }
-
-    let length = 0;
-    const timer = window.setInterval(() => {
-      length = Math.min(reasoning.length, length + 1);
-      setVisibleReasoning(reasoning.slice(0, length));
-      if (length === reasoning.length) window.clearInterval(timer);
-    }, 28);
-    return () => window.clearInterval(timer);
-  }, [reasoning]);
 
   return (
     <article className="rounded-2xl border border-[var(--line)] bg-[var(--surface-muted)] p-4 sm:p-5" aria-label={`AI ${debateStageLabels[verdict.stage]} 결과`}>
@@ -83,10 +66,7 @@ export function DebateVerdictCard({ verdict }: { verdict: DebateVerdict }) {
       {failed ? (
         <p className="mt-4 text-sm leading-6 text-[var(--danger)]">AI 판결을 완료하지 못했습니다.</p>
       ) : reasoning ? (
-        <p className="mt-4 whitespace-pre-wrap break-words text-sm leading-6 text-[var(--ink)]" aria-label={reasoning}>
-          <span aria-hidden>{visibleReasoning}</span>
-          {visibleReasoning.length < reasoning.length ? <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-[var(--ink-muted)] align-middle" aria-hidden /> : null}
-        </p>
+        <p className="mt-4 whitespace-pre-wrap break-words text-sm leading-6 text-[var(--ink)]">{reasoning}</p>
       ) : (
         <p className="mt-4 text-sm leading-6 text-[var(--ink-muted)]">판결 결과를 확인하고 있습니다.</p>
       )}

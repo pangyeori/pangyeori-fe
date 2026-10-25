@@ -3,14 +3,62 @@ import { test } from "node:test";
 
 import {
   applyDebateConnectionEvent,
+  applyDebateEarlyEndEvent,
   applyDebatePresenceSnapshot,
   confirmDebateDeparture,
+  initialDebateEarlyEnd,
   initialDebatePresence,
+  isDebateEarlyEndEvent,
   isDebateProgressEvent,
   mergeDebateHistoryEvent,
   mergeDebateHistoriesEvent,
   parseDebateConnectionEvent,
+  shouldNotifyEarlyEndDeclined,
 } from "./presenceEvents.ts";
+
+test("tracks early-end proposals and clears every terminal event", () => {
+  const proposed = parseDebateConnectionEvent(JSON.stringify({
+    debateId: "debate-1",
+    type: "EARLY_END_PROPOSED",
+    role: "HOST",
+    expiresAt: "2026-10-25T12:00:30",
+  }), "debate-1");
+  assert.ok(proposed);
+  assert.equal(isDebateEarlyEndEvent(proposed), true);
+  assert.equal(applyDebateConnectionEvent(initialDebatePresence, proposed), initialDebatePresence);
+  const pending = applyDebateEarlyEndEvent(initialDebateEarlyEnd, proposed);
+  assert.deepEqual(pending, {
+    pending: true,
+    proposerRole: "HOST",
+    expiresAt: "2026-10-25T12:00:30",
+  });
+
+  for (const type of ["EARLY_END_ACCEPTED", "EARLY_END_DECLINED", "EARLY_END_CANCELLED", "EARLY_END_EXPIRED"]) {
+    const event = parseDebateConnectionEvent(JSON.stringify({ debateId: "debate-1", type, role: "GUEST" }), "debate-1");
+    assert.ok(event);
+    assert.deepEqual(applyDebateEarlyEndEvent(pending, event), initialDebateEarlyEnd);
+  }
+});
+
+test("rejects malformed early-end events", () => {
+  const proposed = { debateId: "debate-1", type: "EARLY_END_PROPOSED", role: "HOST", expiresAt: "2026-10-25T12:00:30" };
+  for (const patch of [{ role: null }, { expiresAt: null }, { expiresAt: "invalid" }, { debateId: "other" }]) {
+    assert.equal(parseDebateConnectionEvent(JSON.stringify({ ...proposed, ...patch }), "debate-1"), null);
+  }
+  assert.equal(parseDebateConnectionEvent(JSON.stringify({
+    debateId: "debate-1", type: "EARLY_END_ACCEPTED", role: null,
+  }), "debate-1"), null);
+});
+
+test("only the proposer is notified when the opponent declines", () => {
+  const declined = parseDebateConnectionEvent(JSON.stringify({
+    debateId: "debate-1", type: "EARLY_END_DECLINED", role: "GUEST",
+  }), "debate-1");
+  assert.ok(declined);
+  assert.equal(shouldNotifyEarlyEndDeclined(declined, "HOST"), true);
+  assert.equal(shouldNotifyEarlyEndDeclined(declined, "GUEST"), false);
+  assert.equal(shouldNotifyEarlyEndDeclined(declined, undefined), false);
+});
 
 test("applies entered, left, and started events", () => {
   const entered = parseDebateConnectionEvent(
@@ -81,6 +129,38 @@ test("verdict events accept all results and never change participant presence", 
     { ...failed, stage: "OPENING_PROS" },
     { ...failed, winnerPosition: "PROS" },
   ]) assert.equal(parseDebateConnectionEvent(JSON.stringify(invalid), "debate-1"), null);
+});
+
+test("final verdict and debate-ended events require their result contract", () => {
+  const finalVerdict = {
+    debateId: "debate-1", type: "VERDICT_ISSUED", role: null, stage: "FINAL_VERDICT",
+    verdictStatus: "SUCCESS", winnerPosition: "PROS", reasoning: "찬성 측의 근거가 더 구체적입니다.",
+    participantProsScore: 62.5, participantConsScore: 37.5,
+  };
+  const verdictEvent = parseDebateConnectionEvent(JSON.stringify(finalVerdict), "debate-1");
+  assert.ok(verdictEvent);
+  assert.equal(isDebateProgressEvent(verdictEvent), true);
+
+  for (const patch of [
+    { participantProsScore: null },
+    { participantConsScore: null },
+    { participantProsScore: 70, participantConsScore: 40 },
+    { participantProsScore: -1, participantConsScore: 101 },
+  ]) assert.equal(parseDebateConnectionEvent(JSON.stringify({ ...finalVerdict, ...patch }), "debate-1"), null);
+
+  for (const event of [
+    { debateId: "debate-1", type: "DEBATE_ENDED", stage: "FINAL_VERDICT", verdictStatus: "SUCCESS", winnerPosition: "PROS" },
+    { debateId: "debate-1", type: "DEBATE_ENDED", stage: "FINAL_VERDICT", verdictStatus: "FAILED", winnerPosition: null },
+  ]) {
+    const parsed = parseDebateConnectionEvent(JSON.stringify(event), "debate-1");
+    assert.ok(parsed);
+    assert.equal(isDebateProgressEvent(parsed), true);
+    assert.equal(applyDebateConnectionEvent(initialDebatePresence, parsed), initialDebatePresence);
+  }
+
+  assert.equal(parseDebateConnectionEvent(JSON.stringify({
+    debateId: "debate-1", type: "DEBATE_ENDED", stage: "FREE", verdictStatus: "SUCCESS", winnerPosition: "PROS",
+  }), "debate-1"), null);
 });
 
 test("statement cache updates preserve stored verdicts and deduplicate repeated events", () => {
