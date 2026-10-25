@@ -2,12 +2,16 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/Button";
 import { RefreshButton } from "@/components/ui/RefreshButton";
-import type { MyDebate, Position } from "@/features/debates/api/debates";
+import { useAuth } from "@/features/auth/context/AuthProvider";
+import { getDebateHistories, type MyDebate, type Position } from "@/features/debates/api/debates";
 import { RelativeDate } from "@/features/debates/components/RelativeDate";
 import {
+  canReviewDebate,
+  debateOutcome,
   debateStatusLabel,
   fetchRemainingDebatePages,
   isPastDebate,
@@ -34,10 +38,29 @@ function rememberHostRoom(debate: MyDebate) {
 }
 
 function DebateItem({ debate, now }: { debate: MyDebate; now: number }) {
+  const { accessToken } = useAuth();
   const canManage = debate.myRole === "HOST" && debate.debateStatus === "WAITING";
   const canEnter = debate.debateStatus === "READY" || debate.debateStatus === "IN_PROGRESS";
+  const canReview = canReviewDebate(debate.debateStatus);
+  const verdictQuery = useQuery({
+    queryKey: ["debates", debate.debateId, "histories", accessToken],
+    queryFn: () => getDebateHistories(debate.debateId, accessToken!),
+    enabled: Boolean(accessToken && canReview),
+    staleTime: Infinity,
+    retry: false,
+  });
+  const finalVerdict = verdictQuery.data?.verdicts.find(({ stage }) => stage === "FINAL_VERDICT");
+  const outcome = finalVerdict ? debateOutcome(debate.myPosition, finalVerdict.winnerPosition) : null;
+  const verdictUnavailable = verdictQuery.isError || finalVerdict?.status === "FAILED";
+  const badgeLabel = canReview
+    ? verdictQuery.isPending ? "결과 확인 중" : verdictUnavailable || !outcome ? "판결 확인 불가" : outcome
+    : debateStatusLabel(debate.debateStatus);
   const cancelled = debate.debateStatus === "CANCELLED";
-  const badgeClass = isPastDebate(debate.debateStatus)
+  const badgeClass = canReview
+    ? outcome === "승리"
+      ? "bg-emerald-50 text-emerald-700"
+      : outcome === "패배" ? "bg-rose-50 text-rose-700" : "bg-slate-100 text-slate-600"
+    : isPastDebate(debate.debateStatus)
     ? cancelled
       ? "bg-slate-100 text-slate-600"
       : "bg-emerald-50 text-emerald-700"
@@ -50,7 +73,7 @@ function DebateItem({ debate, now }: { debate: MyDebate; now: number }) {
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${badgeClass}`}>
-            {debateStatusLabel(debate.debateStatus)}
+            {badgeLabel}
           </span>
           <span className="text-xs font-medium text-[var(--ink-faint)]">
             {debate.myRole === "HOST" ? "방장" : "참여자"} · {positionLabel(debate.myPosition)}
@@ -66,7 +89,7 @@ function DebateItem({ debate, now }: { debate: MyDebate; now: number }) {
         </p>
       </div>
 
-      <div className="mt-4 shrink-0 sm:mt-0">
+      <div className="mt-4 flex shrink-0 flex-wrap items-center justify-end gap-3 sm:mt-0">
         {canManage ? (
           <Link
             href={`/debates/${encodeURIComponent(debate.debateId)}/waiting`}
@@ -81,6 +104,13 @@ function DebateItem({ debate, now }: { debate: MyDebate; now: number }) {
             className="rounded-lg border border-[var(--line)] bg-white px-4 py-2 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-muted)]"
           >
             토론방 입장
+          </Link>
+        ) : canReview ? (
+          <Link
+            href={`/debates/${encodeURIComponent(debate.debateId)}?view=final`}
+            className="rounded-lg border border-[var(--line)] bg-white px-4 py-2 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-muted)]"
+          >
+            최종 판결 보기
           </Link>
         ) : !isPastDebate(debate.debateStatus) ? (
           <span className="text-xs font-medium text-[var(--ink-faint)]">
