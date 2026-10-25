@@ -1,7 +1,20 @@
-import type { DebateLifecycleStatus } from "@/features/debates/api/debates";
+import type { DebateLifecycleStatus, Position, WinnerPosition } from "@/features/debates/api/debates";
 
 export function isPastDebate(status: DebateLifecycleStatus) {
   return status === "FINISHED" || status === "CANCELLED";
+}
+
+export function canReviewDebate(status: DebateLifecycleStatus) {
+  return status === "FINISHED";
+}
+
+export function debateOutcome(
+  myPosition: Position,
+  winnerPosition: WinnerPosition | null,
+) {
+  if (!winnerPosition) return null;
+  if (winnerPosition === "DRAW") return "무승부";
+  return winnerPosition === myPosition ? "승리" : "패배";
 }
 
 export function debateStatusLabel(status: DebateLifecycleStatus) {
