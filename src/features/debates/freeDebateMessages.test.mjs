@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { canSendFreeMessage, freeMessageError, mergeFreeMessages } from "./freeDebateMessages.ts";
+import { canSendFreeMessage, freeMessageError, groupFreeMessages, mergeFreeMessages } from "./freeDebateMessages.ts";
 import { applyDebateConnectionEvent, initialDebatePresence, parseDebateConnectionEvent } from "./presenceEvents.ts";
 
 const event = { debateId: "room", type: "FREE_MESSAGE_SENT", role: "GUEST", stage: null, messageId: "002", content: "의견입니다", submittedAt: "2026-10-18T13:30:00" };
@@ -22,6 +22,24 @@ test("REST descending pages and realtime bursts merge by ID while keeping repeat
   assert.deepEqual(merged.map(({ id }) => id), ["001", "002", "003", "004", "005"]);
   assert.equal(merged[3].role, "GUEST");
   assert.equal(latestPage[0].id, "004", "inputs remain unchanged");
+});
+
+test("consecutive messages from the same role share one author label and one timestamp", () => {
+  const grouped = groupFreeMessages([
+    message("001"),
+    message("002"),
+    message("003", "GUEST"),
+    message("004", "GUEST"),
+    message("005"),
+  ]);
+
+  assert.deepEqual(grouped.map(({ startsGroup, endsGroup }) => [startsGroup, endsGroup]), [
+    [true, false],
+    [false, true],
+    [true, false],
+    [false, true],
+    [true, true],
+  ]);
 });
 
 test("server error text is preserved, with fallbacks only for missing or invalid messages", () => {
