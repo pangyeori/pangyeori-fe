@@ -882,7 +882,7 @@ export function DebateRoom({ debateId, finalView = false }: { debateId: string; 
                   </button>
                 </div>
               ) : timelineStages.length || histories?.length || verdicts?.length || scheduledContent ? (
-                <ol className="space-y-5">
+                <ol className="space-y-1">
                   {timelineStages.map((stage) => (
                     <Fragment key={stage}>
                       <StageNotice stage={stage} />
