@@ -1,0 +1,24 @@
+.court { position: relative; display: grid; place-items: center; width: 100%; max-width: 480px; aspect-ratio: 1; margin: auto; isolation: isolate; }
+.shadow { position: absolute; z-index: -1; bottom: 11%; left: 24%; width: 52%; height: 5%; border-radius: 50%; background: #252b3612; filter: blur(12px); }
+.character { width: 80%; }
+.judge { display: block; width: 100%; border-radius: 45%; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.judgeArt, .judgeArt img { display: block; width: 100%; height: auto; }
+@media (prefers-reduced-motion: no-preference) {
+  .court[data-floating="true"][data-ready="true"] .character { animation: float 4.8s ease-in-out infinite; transform-origin: 50% 85%; }
+  .court[data-floating="true"][data-ready="true"] .shadow { animation: breathe 4.8s ease-in-out infinite; }
+  .court[data-floating="true"][data-ready="true"][data-paused="true"] :is(.character, .shadow) { animation-play-state: paused; }
+  @keyframes float {
+    0%, 100% { transform: translateY(0) rotate(0); }
+    40% { transform: translateY(-18px) rotate(-1.5deg); }
+    75% { transform: translateY(-5px) rotate(.8deg); }
+  }
+  @keyframes breathe {
+    0%, 100% { transform: scaleX(1); opacity: 1; }
+    40% { transform: scaleX(.9); opacity: .7; }
+    75% { transform: scaleX(.97); opacity: .92; }
+  }
+}
+.greeting { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (max-width: 767px) {
+  .court { max-width: 350px; }
+}
