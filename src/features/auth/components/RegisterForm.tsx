@@ -213,7 +213,7 @@ export function RegisterForm() {
 
   return (
     <form
-      className="flex flex-col gap-4"
+      className="flex flex-col gap-6"
       aria-busy={registerMutation.isPending}
       onSubmit={handleSubmit(
         (formValues) => {
@@ -246,7 +246,7 @@ export function RegisterForm() {
         description="반가워요. 함께 나눌 첫 생각을 준비해볼까요?"
       />
 
-      <fieldset disabled={registerMutation.isPending} className="flex min-w-0 flex-col gap-3">
+      <fieldset disabled={registerMutation.isPending} className="flex min-w-0 flex-col gap-5">
       <legend className="sr-only">회원가입 정보</legend>
       <Input
         label="닉네임"
@@ -291,6 +291,7 @@ export function RegisterForm() {
       />
 
       <EmailVerifyField
+        helperText="인증받을 이메일을 입력해주세요."
         onVerificationComplete={() => setFocus("password")}
         floatingLabel
         appearance="underline"
@@ -372,6 +373,7 @@ export function RegisterForm() {
         ref={passwordConfirmRef}
       />
 
+      <div className="flex flex-col gap-3 pt-1">
       {termsNotice ? <p role="status" className="text-sm">{termsNotice}</p> : null}
       <TermsQueryStatus pending={termsQuery.isPending} error={termsQuery.error} empty={terms.length === 0}
         fetching={termsQuery.isFetching} onRetry={() => { void termsQuery.refetch(); }}
@@ -385,6 +387,7 @@ export function RegisterForm() {
           error={isSubmitted ? errors.agreedTermsIds?.message : undefined}
         />
       ) : null}
+      </div>
       </fieldset>
 
       {serverError ? <FormAlert>{serverError}</FormAlert> : null}
