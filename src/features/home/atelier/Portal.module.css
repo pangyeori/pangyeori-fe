@@ -1,0 +1,16 @@
+.portalScene { position: absolute; width: 660px; height: 555px; left: calc(50% - 330px); top: 250px; }
+.prismHost { position: absolute; inset: 0; }
+.prismHost canvas { position: absolute; width: 100%; height: 100%; inset: 0; }
+.prismFallback { position: absolute; width: 435px; height: 435px; top: 60px; left: calc(50% - 217.5px); border-radius: 50%; background: conic-gradient(from 40deg, #d5e8ac, #bcb0e7, #535e46, #d5e8ac, #a594cd, #d5e8ac); mask-image: radial-gradient(circle, transparent 47%, #000 48%, #000 69%, transparent 70%); transform: rotate(-20deg) scaleY(.93); }
+.prismHost[data-ready] .prismFallback { visibility: hidden; }
+.portalOrbit { position: absolute; inset: 24px 57px; border: 1px solid #ab98c445; border-radius: 50%; transform: rotate(-30deg) scaleY(.85); pointer-events: none; }
+.portalCoordinate { position: absolute; left: 54px; bottom: 113px; font-size: 8px; color: #8c7a9d; transform: rotate(-68deg); transform-origin: left; pointer-events: none; }
+.portalStar { position: absolute; right: 95px; top: 105px; color: var(--accent); font-size: 34px; pointer-events: none; }
+.mascotPosition { position: absolute; left: calc(50% - 130px); top: 170px; width: 260px; text-align: center; }
+.mascotButton { display: block; width: 260px; cursor: pointer; border-radius: 50%; -webkit-tap-highlight-color: transparent; }
+.mascotButton img { width: 100%; height: auto; filter: drop-shadow(0 18px 20px #6c518d24); }
+.greeting { position: absolute; top: 100%; left: -30px; width: 320px; margin-top: 5px; font-size: 11px; color: #665176; pointer-events: none; }
+.greeting p { display: inline-block; min-height: 25px; padding: 7px 13px; border: 1px solid #ded3ea; border-radius: 20px; background: #fffdfbf2; }
+.pause { position: absolute; display: flex; align-items: center; gap: 9px; bottom: 35px; left: 50%; transform: translateX(-50%); min-height: 32px; padding: 5px 12px; border: 1px solid #d4c8e1; background: #fffdfbe6; border-radius: 20px; color: #736380; font-size: 9px; cursor: pointer; white-space: nowrap; }
+.pause:disabled { cursor: default; }
+.pause > span { font-size: 12px; }
