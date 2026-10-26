@@ -25,7 +25,7 @@ function getRequestError(error: Error | null) {
   if (!error) return undefined;
   if (error instanceof ApiError) {
     if (error.status === 401 || error.code === "INVALID_CREDENTIALS") {
-      return "로그인에 실패했습니다. 이메일 또는 비밀번호를 확인해주세요.";
+      return "이메일 또는 비밀번호를 확인해주세요";
     }
     if (error.status === 429) {
       return "로그인 시도가 많습니다. 잠시 후 다시 시도해주세요.";

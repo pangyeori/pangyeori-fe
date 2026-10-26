@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/features/auth/context/AuthProvider";
 import { useSignOut } from "@/features/auth/hooks/useSignOut";
 import { TermsAgreement } from "@/features/auth/components/shared/TermsAgreement";
-import { agreeTerms, getPendingTerms } from "@/features/terms/api";
+import { agreeTerms } from "@/features/terms/api";
+import { pendingTermsQueryOptions } from "@/features/terms/queries";
 import { canAgreeToTerms, needsTermsRefresh, selectedTermsIds, type Terms } from "@/features/terms/terms";
 import { TermsQueryStatus } from "@/features/terms/components/TermsQueryStatus";
 import { ApiError } from "@/lib/api/client";
@@ -45,14 +46,19 @@ export function TermsConsentGate({ children }: { children: ReactNode }) {
   const { accessToken, isReady } = useAuth();
   const signOut = useSignOut();
   const pending = useQuery({
-    queryKey: ["terms", "pending", accessToken],
-    queryFn: () => getPendingTerms(accessToken!),
+    ...pendingTermsQueryOptions(accessToken ?? ""),
     enabled: isReady && Boolean(accessToken),
-    staleTime: 0, gcTime: 0, retry: false, refetchOnWindowFocus: true,
   });
 
   if (!isReady || !accessToken) return children;
   if (pending.isSuccess && pending.data.length === 0) return children;
+  if (pending.isPending) {
+    return (
+      <main className="mx-auto flex w-full max-w-xl flex-1 items-center justify-center px-5 py-12">
+        <p role="status" className="text-sm text-[var(--ink-muted)]">로그인 정보를 확인하고 있습니다.</p>
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center gap-6 px-5 py-12">

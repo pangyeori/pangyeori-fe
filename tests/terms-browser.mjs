@@ -73,6 +73,8 @@ try {
   let authenticated = false;
   let pending = [];
   let pendingError = false;
+  let pendingDelay = 0;
+  let signInStatus = 200;
   let registerAttempts = 0;
   let agreementAttempts = 0;
   let marketingAgreed = false;
@@ -98,6 +100,12 @@ try {
     if (path === "/api/v1/auth/refresh") {
       if (authenticated) data = { accessToken: "terms-test-session", tokenType: "Bearer" };
       else status = 401;
+    } else if (path === "/api/v1/auth/signin") {
+      status = signInStatus;
+      if (status === 200) {
+        authenticated = true;
+        data = { accessToken: "terms-test-session", tokenType: "Bearer" };
+      } else { code = "INVALID_CREDENTIALS"; error = "이메일 또는 비밀번호가 올바르지 않습니다."; }
     } else if (path === "/api/v1/terms") {
       if (termsMode === "error") { status = 503; error = "약관 조회 실패 원문"; }
       else if (termsMode === "empty") data = [];
@@ -131,11 +139,11 @@ try {
     const payload = status >= 400
       ? { success: false, data: null, error: { code, message: error, details: [{ message: "대신 보여주면 안 되는 상세 오류" }] } }
       : { success: true, data, error: null };
-    void call("Fetch.fulfillRequest", {
+    void pause(path === "/api/v1/users/me/term-agreements/pending" ? pendingDelay : 0).then(() => call("Fetch.fulfillRequest", {
       requestId, responseCode: status,
       responseHeaders: status === 204 || status === 201 ? [] : [{ name: "Content-Type", value: "application/json" }],
       body: status === 204 || status === 201 ? "" : Buffer.from(JSON.stringify(payload)).toString("base64"),
-    }).catch((error) => runtimeErrors.push(error.message));
+    })).catch((error) => runtimeErrors.push(error.message));
   });
   await call("Runtime.enable");
   await call("Page.enable");
@@ -153,6 +161,13 @@ try {
   termsMode = "ready";
   await click("약관 다시 불러오기");
   await until("document.querySelectorAll('input[type=checkbox]').length === 4");
+  assert.equal(await evaluate(`(() => {
+    const legend = [...document.querySelectorAll('legend')].find(el => el.textContent === '약관 동의');
+    const title = legend.parentElement.querySelector('p[aria-hidden=true]');
+    const box = legend.parentElement.getBoundingClientRect();
+    const rect = title.getBoundingClientRect();
+    return legend.classList.contains('sr-only') && rect.top > box.top && rect.bottom < box.bottom;
+  })()`), true, "Consent title is inside the border; accessible legend remains");
   await click("보기");
   await until("document.querySelector('dialog[open]')");
   assert.equal(await evaluate("Boolean(document.querySelector('dialog h2')) && !window.unsafeTerms"), true);
@@ -237,6 +252,61 @@ try {
   await click("로그아웃");
   await until("location.pathname === '/signin'");
   assert.equal(await evaluate("document.body.innerText.includes('마케팅 정보 수신 설정')"), false);
+
+  const openSignIn = async () => {
+    authenticated = false;
+    await call("Page.navigate", { url: `${base}/signin` });
+    await until("document.querySelector('[name=email]') && document.querySelector('button[type=submit]')");
+    await fill('[name="email"]', "terms@example.invalid");
+    await fill('[name="password"]', "wrong-password");
+  };
+  await openSignIn();
+  signInStatus = 401;
+  await evaluate("document.querySelector('button[type=submit]').click()");
+  await until("document.querySelector('#signin-credentials-error')?.textContent === '이메일 또는 비밀번호를 확인해주세요'");
+  await fill('[name="password"]', "correct-password");
+  assert.equal(await evaluate("document.querySelector('#signin-credentials-error').textContent"), "");
+
+  signInStatus = 200;
+  pendingDelay = 1200;
+  pending = [];
+  pendingError = false;
+  const pendingCalls = () => calls.filter(c => c.path.endsWith('/term-agreements/pending')).length;
+  const before = pendingCalls();
+  await evaluate(`(() => {
+    window.termsFlashed = false;
+    window.termsObserver = new MutationObserver(() => {
+      if (document.body.innerText.includes('필수 약관 확인')) window.termsFlashed = true;
+    });
+    window.termsObserver.observe(document.body, { childList: true, subtree: true });
+    document.querySelector('button[type=submit]').click();
+  })()`);
+  for (let i = 0; i < 50 && pendingCalls() === before; i++) await pause(20);
+  assert.ok(pendingCalls() > before, "Login checks pending terms");
+  assert.equal(await evaluate("location.pathname === '/signin' && document.querySelector('button[type=submit]').disabled && !window.termsFlashed"), true);
+  await until("location.pathname === '/' && !document.querySelector('[role=status]')");
+  await pause(200);
+  assert.equal(await evaluate("window.termsFlashed"), false, "No false re-consent screen during sign-in");
+  assert.equal(pendingCalls(), before + 1, "Gate reuses the sign-in query");
+  await evaluate("window.termsObserver.disconnect()");
+
+  await openSignIn();
+  pending = [terms[0]];
+  pendingDelay = 0;
+  await evaluate("document.querySelector('button[type=submit]').click()");
+  await until("document.body.innerText.includes('동의하고 계속하기')");
+  assert.equal(await evaluate("document.querySelector('button[type=submit]').disabled"), true, "Actual consent still blocks entry");
+
+  await openSignIn();
+  pendingError = true;
+  await evaluate("document.querySelector('button[type=submit]').click()");
+  await until("document.body.innerText.includes('재동의 확인 실패 원문')");
+  assert.equal(await evaluate("Boolean(document.querySelector('[name=password]'))"), false, "Terms outage is not a credential failure");
+  pendingError = false;
+  pending = [];
+  await click("약관 다시 불러오기");
+  await until("!document.body.innerText.includes('필수 약관 확인') && location.pathname === '/'");
+  console.log("PASS login: concise credentials error, delayed consent check without flashing, cached result, required consent, failure/retry");
   assert.deepEqual(runtimeErrors, []);
   assert.deepEqual(unexpected, []);
   console.log("PASS marketing: opt-in, failed withdrawal preserves state, withdrawal, logout; no runtime errors/unexpected API calls");
