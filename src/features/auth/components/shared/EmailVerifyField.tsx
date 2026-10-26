@@ -37,6 +37,7 @@ type EmailVerifyFieldProps = {
   inputRef: Ref<HTMLInputElement>;
   emailLabel?: string;
   emailPlaceholder?: string;
+  helperText?: string;
   timerPrefix?: string;
   appearance?: FieldAppearance;
   floatingLabel?: boolean;
@@ -108,6 +109,7 @@ export function EmailVerifyField({
   inputRef,
   emailLabel = "이메일",
   emailPlaceholder = "email@example.com",
+  helperText,
   timerPrefix = "남은 시간",
   appearance = "box",
   floatingLabel = false,
@@ -364,7 +366,7 @@ export function EmailVerifyField({
         appearance={appearance}
         floatingLabel={floatingLabel}
         reserveFeedback={reserveFeedback}
-        helperText={compactVerification ? "인증받을 이메일을 입력해주세요." : undefined}
+        helperText={helperText ?? (compactVerification ? "인증받을 이메일을 입력해주세요." : undefined)}
         showClear={Boolean(onClear && email && !emailVerified)}
         onClear={() => {
           resetVerificationUi();
