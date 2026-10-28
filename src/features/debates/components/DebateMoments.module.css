@@ -1,0 +1,25 @@
+.moment { --cue: #e2e8f0; --flight: -55vw; position: fixed; inset: 0; z-index: 45; display: grid; place-items: center; padding: 18px; overflow: hidden; pointer-events: none; background: rgb(15 23 42 / 38%); transition: opacity .26s; }
+.moment[data-position="PROS"] { --cue: #bfdbfe; --flight: 55vw; }
+.moment[data-position="CONS"] { --cue: #fecdd3; }
+.stage { display: flex; flex-direction: column; align-items: center; gap: 12px; perspective: 850px; }
+.caption { padding: 6px 12px; border-radius: 999px; background: #172435; color: white; font-size: 12px; font-weight: 700; }
+.art { position: relative; isolation: isolate; width: min(65vw, 300px, calc(100dvh - 210px)); aspect-ratio: 1; }
+.art img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 12px 10px #0f172a33); animation: swoop .65s cubic-bezier(.16,.8,.3,1) both; }
+.burst { position: absolute; z-index: -1; inset: 4%; border-radius: 35%; background: radial-gradient(circle, #fff9 1px, transparent 1.5px) 0 0 / 7px 7px, var(--cue); transform: rotate(-12deg); animation: burst .5s .2s both; }
+.ring { position: absolute; inset: 8%; border: 3px solid white; border-radius: 50%; animation: ring .65s .3s both; }
+.impact { position: absolute; top: 10%; right: 0; color: #fff4b8; font-size: 40px; font-weight: 800; -webkit-text-stroke: 1px #16243d; transform: rotate(12deg); animation: burst .35s .3s both; }
+.stage strong { padding: 9px 20px 13px; border: 3px solid #16243d; border-radius: 6px 6px 18px 6px; background: linear-gradient(#fff, var(--cue)); box-shadow: 5px 6px 0 #16243d; color: #16243d; font-size: clamp(26px, 5vw, 40px); font-weight: 800; line-height: 1.25; animation: caption .4s .35s both; }
+.leaving { opacity: 0; }
+.moment[data-scene="victory"] { --cue: #fde68a; }
+.moment[data-scene="victory"] img { animation: celebrate 1.1s both; }
+.moment[data-scene="defeat"] img { animation: settle .65s both; }
+.moment[data-scene="defeat"] { --cue: #cbd5e1; }
+.moment[data-scene="defeat"] .ring { display: none; }
+@keyframes swoop { from { opacity: 0; transform: translateX(var(--flight)) scale(.35) rotate(-20deg); } 65% { opacity: 1; transform: scale(1.08) rotate(5deg); } to { transform: none; } }
+@keyframes burst { from { opacity: 0; scale: .35; } to { opacity: 1; scale: 1; } }
+@keyframes ring { from { opacity: .9; transform: scale(.5); } to { opacity: 0; transform: scale(1.6); } }
+@keyframes caption { from { opacity: 0; transform: translateY(18px) scale(.75); } to { opacity: 1; transform: none; } }
+@keyframes celebrate { from { opacity: 0; transform: translateY(50px) scale(.65); } 45%, 80% { opacity: 1; transform: translateY(-12px) scale(1.04); } 65%, 100% { transform: none; } }
+@keyframes settle { from { opacity: 0; transform: translateY(-18px); } to { opacity: 1; transform: rotate(-5deg); } }
+@media (max-height: 450px) { .stage { gap: 6px; } .art { width: min(32vw, calc(100dvh - 140px)); } .stage strong { font-size: 24px; padding: 5px 14px 8px; } }
+@media (prefers-reduced-motion: reduce) { .moment, .moment * { animation: none !important; transition: none !important; } .ring { display: none; } }

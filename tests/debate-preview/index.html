@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>판겨리 · 채팅 검증실</title>
+  <style>
+    [hidden]{display:none!important}
+    *{box-sizing:border-box}body{margin:0;background:#f5f6f8;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;font-size:14px}button,select{font:inherit}button{cursor:pointer}button:focus-visible,select:focus-visible{outline:3px solid #93b4ff;outline-offset:2px}header{height:76px;display:flex;align-items:center;justify-content:space-between;padding:0 30px;background:white;border-bottom:1px solid #e3e7ee}header strong{font-size:18px;letter-spacing:-.7px}header p{margin:5px 0 0;color:#788194;font-size:12px}.local{font-size:11px;font-weight:700;color:#277665;background:#edf7f2;padding:7px 10px;border-radius:30px}.layout{display:grid;grid-template-columns:300px minmax(0,1fr);min-height:calc(100dvh - 76px)}.controls{padding:24px 20px;background:white;border-right:1px solid #e3e7ee}section+section{border-top:1px solid #edf0f4;margin-top:20px;padding-top:20px}h2{font-size:12px;letter-spacing:-.2px;margin:0 0 11px}.hint{font-size:11px;color:#788194;line-height:1.7;margin:8px 0 0}.choices{display:grid;grid-template-columns:1fr 1fr;gap:7px}.choices button,.action{border:1px solid #e2e7ef;border-radius:9px;background:white;color:#4c586c;padding:10px 8px;font-size:12px;font-weight:600;min-height:38px}.choices button:hover,.action:hover{background:#f7f9fc;border-color:#bdcbe0}.choices button[aria-pressed=true]{background:#eef4ff;color:#245cd4;border-color:#9fbbf5}.actions{display:flex;flex-direction:column;gap:7px}.primary{background:#172438!important;color:white!important;border-color:#172438!important}.actions .hint{margin-top:0}.select{display:flex;align-items:center;justify-content:space-between;color:#667085;font-size:12px}.select select{padding:7px 12px;border:1px solid #dde3ec;border-radius:8px;color:#172033;background:white}.results .win{color:#245cd4}.results .cons{color:#bf3154}.results .fail{color:#9d4a37}.main{min-width:0;padding:22px 28px}.toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}.toolbar h1{margin:0;font-size:15px}.toolbar p{margin:5px 0 0;color:#788194;font-size:11px}.sizes{display:flex;gap:5px}.sizes button{border:1px solid #dfe5ee;background:white;border-radius:7px;padding:8px 11px;font-size:11px;color:#687387}.sizes button[aria-pressed=true]{background:#172438;border-color:#172438;color:white}.stats{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:14px;color:#687387;font-size:11px}.stats span{display:inline-block;border:1px solid #e1e6ee;border-radius:6px;background:white;padding:6px 9px}.stats .issue{color:#a35727;background:#fff8ed;border-color:#f3d5a9}.screen{height:calc(100dvh - 223px);min-height:460px;border:1px solid #e2e6ed;border-radius:18px;background:radial-gradient(#dce2eb .7px,transparent .7px) 0 0/12px 12px;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:18px}.canvas{position:relative;flex-shrink:0;border-radius:14px;background:white;box-shadow:0 15px 50px #192c4920;overflow:hidden}.canvas iframe{display:block;border:0;position:absolute;top:0;left:0;transform-origin:top left;background:white}.footnote{font-size:11px;color:#8791a2;text-align:center;margin:12px 0 0}.event-log{margin:0;padding:0;list-style:none;max-height:155px;overflow:auto;font-size:10px;line-height:1.7;color:#748094}.event-log li{padding:4px 0;border-bottom:1px solid #f1f3f6}.event-log time{color:#a0a8b4;margin-right:5px}.clear{border:0;background:none;color:#8c97a6;font-size:10px;padding:0}.section-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.section-heading h2{margin:0}.legend{display:flex;gap:10px;font-size:10px;color:#8490a1}.legend b{font-weight:500}.legend .pros{color:#2563eb}.legend .cons{color:#c33758}@media(max-width:900px){header{padding:0 18px;height:70px}.layout{grid-template-columns:240px minmax(0,1fr)}.controls{padding:18px 14px}.main{padding:18px 14px}.toolbar{align-items:start;flex-direction:column}.screen{height:calc(100dvh - 250px)}.sizes button{padding:6px 9px}}@media(max-width:620px){.layout{display:flex;flex-direction:column}.controls{border-right:0;border-bottom:1px solid #e3e7ee;max-height:310px;overflow:auto}.controls>section{display:inline-block;vertical-align:top;width:calc(50% - 8px);margin:0 3px 14px;padding:0;border:0}.controls>section:last-child{display:block;width:100%;margin-top:6px;padding-top:12px;border-top:1px solid #edf0f4}.main{padding:18px 12px}.toolbar{flex-direction:row;align-items:center}.toolbar p{max-width:190px;line-height:1.5}.sizes{flex-wrap:wrap;justify-content:end;max-width:170px}.screen{height:650px;min-height:400px}header strong{font-size:16px}.local{font-size:10px}.footnote{line-height:1.7}}
+  </style>
+</head>
+<body>
+  <header><div><strong>판겨리 <span style="font-weight:400;color:#9ba4b3">/</span> 채팅 검증실</strong><p>현재 구현한 화면으로 직접 확인하는 디자인 · 상태 전환 샘플</p></div><span class="local">LOCAL SAMPLE · #71</span></header>
+  <div class="layout">
+    <aside class="controls" aria-label="샘플 조작">
+      <section><h2>01 &nbsp;시작 장면</h2><div class="choices" id="scenes">
+        <button data-scene="ready" aria-pressed="false">참여자 대기</button><button data-scene="opening" aria-pressed="false">처음부터 진행</button>
+        <button data-scene="interim" aria-pressed="false">중간 판결 대기</button><button data-scene="free" aria-pressed="true">자유 토론</button>
+        <button data-scene="final" aria-pressed="false">최종 판결 대기</button><button data-scene="skeleton" aria-pressed="false">처음 조회 · 스켈레톤</button>
+      </div><p class="hint">장면을 바꾸면 샘플이 초기화됩니다.<br>채팅 입력·발언 예약·취소도 직접 해보세요.</p></section>
+      <section><div class="select"><label for="side">내 진영</label><select id="side"><option value="CONS">반대</option><option value="PROS">찬성</option></select></div></section>
+      <section><h2>02 &nbsp;실시간 진행</h2><div class="actions"><button class="action primary" id="next">다음 차례 / 판결 진행 →</button><button class="action" id="reply">상대방 메시지 받기</button></div><p class="hint">판결 단계에서 진행하면 결과와 다음 단계가 순서대로 도착합니다.</p></section>
+      <section><h2>03 &nbsp;판결 결과 선택</h2><div class="choices results">
+        <button class="win" data-result="PROS">찬성 승리</button><button class="cons" data-result="CONS">반대 승리</button>
+        <button data-result="DRAW">무승부</button><button class="fail" id="failure">판결 실패</button>
+      </div><p class="hint">대기 중이면 지금 결과를 전송합니다.<br>다른 장면이면 최종 판결 대기부터 재현합니다.</p></section>
+      <section><h2>04 &nbsp;문제 상황 검증</h2><div class="actions">
+        <button class="action" id="duplicate">같은 이벤트 3번 보내기</button>
+        <button class="action" id="stale">결과 뒤에 늦은 응답 보내기</button>
+        <button class="action" id="network">조회 오류 → 자동 복구</button>
+        <button class="action" id="missing">점수 누락 → 6초 뒤 보충</button>
+        <button class="action" id="disconnect">실시간 연결 끊기 → 재연결</button>
+      </div></section>
+      <section><div class="section-heading"><h2>이벤트 기록</h2><button class="clear" id="clear">지우기</button></div><ol class="event-log" id="log" aria-label="이벤트 기록"></ol></section>
+    </aside>
+    <main class="main">
+      <div class="toolbar"><div><h1 id="scene-title">자유 토론</h1><p id="description">기존 말풍선·연속 채팅·입력창을 확인하세요.</p></div><div class="sizes" aria-label="화면 크기">
+        <button data-width="390" data-height="844" aria-pressed="true">모바일</button><button data-width="768" data-height="1024" aria-pressed="false">태블릿</button><button data-width="1440" data-height="900" aria-pressed="false">PC</button>
+      </div></div>
+      <div class="stats" aria-live="polite"><span id="stage">화면을 불러오는 중…</span><span id="connection">연결 준비</span><span id="count">연출 0회</span><span id="reads">기록 조회 0회</span><span id="fault" hidden></span></div>
+      <div class="screen" id="screen"><div class="canvas" id="canvas"><iframe id="preview" title="현재 채팅 구현 샘플" src="about:blank" allow="clipboard-write"></iframe></div></div>
+      <p class="footnote">실제 프론트 컴포넌트 · 샘플 응답 사용 · 운영 API 요청 차단 <span id="scale"></span></p>
+    </main>
+  </div>
+  <script>
+    (() => {
+      const frame = document.querySelector('#preview');
+      const label = {ready:'참여자 대기',opening:'처음부터 진행',interim:'중간 판결 대기',free:'자유 토론',final:'최종 판결 대기',skeleton:'최초 조회 · 스켈레톤'};
+      const descriptions = {ready:'상대 입장 대기에서 토론 시작으로 넘어가보세요.',opening:'차례를 넘기거나 발언을 작성·예약해보세요.',interim:'판결 뒤 반론 시작 연출이 중복되는지 확인하세요.',free:'기존 말풍선·연속 채팅·입력창을 확인하세요.',final:'퍼센트 없는 로딩 막대와 결과 자동 표시를 확인하세요.',skeleton:'초기 조회를 2.8초 지연해 스켈레톤을 보여줍니다.'};
+      const stageNames = {NONE:'양측 입장 대기',OPENING_PROS:'찬성 입론',OPENING_CONS:'반대 입론',VERDICT_1:'1차 판결',REBUTTAL_PROS:'찬성 반론',REBUTTAL_CONS:'반대 반론',VERDICT_2:'2차 판결',FREE:'자유 토론',FINAL_VERDICT:'최종 판결'};
+      let currentScene = 'free';
+      let state = {};
+      let pendingAction = null;
+      let width = 390;
+      let height = 844;
+      const log = message => {
+        const li = document.createElement('li');
+        const time = document.createElement('time');
+        time.textContent = new Date().toLocaleTimeString('ko-KR',{hour12:false});
+        li.append(time, document.createTextNode(message));
+        const list = document.querySelector('#log');
+        list.prepend(li);
+        while (list.children.length > 50) list.lastElementChild.remove();
+      };
+      const fit = () => {
+        const area = document.querySelector('#screen');
+        const ratio = Math.min(1, (area.clientWidth - 36) / width, (area.clientHeight - 36) / height);
+        const canvas = document.querySelector('#canvas');
+        canvas.style.width = width * ratio + 'px';
+        canvas.style.height = height * ratio + 'px';
+        frame.style.width = width + 'px';
+        frame.style.height = height + 'px';
+        frame.style.transform = 'scale(' + ratio + ')';
+        document.querySelector('#scale').textContent = ' · ' + width + ' × ' + height + ' / ' + Math.round(ratio * 100) + '%';
+      };
+      const send = (action, value) => frame.contentWindow.postMessage({source:'debate-preview-controls',action,value},location.origin);
+      const openScene = (scene, action = null) => {
+        currentScene = scene;
+        state = {};
+        pendingAction = action;
+        document.querySelectorAll('[data-scene]').forEach(button => button.setAttribute('aria-pressed',String(button.dataset.scene === scene)));
+        document.querySelector('#scene-title').textContent = label[scene];
+        document.querySelector('#description').textContent = descriptions[scene];
+        document.querySelector('#stage').textContent = '화면을 불러오는 중…';
+        frame.src = '/debates/preview?scene=' + scene + '&side=' + document.querySelector('#side').value + '&run=' + Date.now();
+        log(label[scene] + ' 장면 열기');
+      };
+      const resultAction = (action, value) => {
+        if (state.stage?.includes('VERDICT') && state.status !== 'FINISHED') send(action,value);
+        else openScene('final',{action,value});
+      };
+      document.querySelectorAll('[data-scene]').forEach(button => button.onclick = () => openScene(button.dataset.scene));
+      document.querySelectorAll('[data-result]').forEach(button => button.onclick = () => resultAction('result',button.dataset.result));
+      document.querySelectorAll('[data-width]').forEach(button => button.onclick = () => {
+        width = Number(button.dataset.width); height = Number(button.dataset.height);
+        document.querySelectorAll('[data-width]').forEach(item => item.setAttribute('aria-pressed',String(item === button)));
+        fit();
+      });
+      document.querySelector('#side').onchange = () => openScene(currentScene);
+      document.querySelector('#next').onclick = () => state.status === 'FINISHED' ? openScene('opening') : send('next');
+      document.querySelector('#reply').onclick = () => send('reply');
+      document.querySelector('#failure').onclick = () => resultAction('failure');
+      document.querySelector('#missing').onclick = () => resultAction('missing');
+      document.querySelector('#stale').onclick = () => resultAction('stale');
+      document.querySelector('#duplicate').onclick = () => send('duplicate');
+      document.querySelector('#disconnect').onclick = () => send('disconnect');
+      document.querySelector('#network').onclick = () => state.stage === 'FINAL_VERDICT' && state.status !== 'FINISHED' ? send('network') : openScene('final',{action:'network'});
+      document.querySelector('#clear').onclick = () => document.querySelector('#log').replaceChildren();
+      window.addEventListener('message', event => {
+        if (event.origin !== location.origin || event.source !== frame.contentWindow || event.data?.source !== 'debate-preview-frame') return;
+        const data = event.data;
+        if (data.type === 'ready' && pendingAction) { const action = pendingAction; pendingAction = null; send(action.action,action.value); }
+        if (data.type === 'log') log(data.message);
+        if (data.type === 'snapshot') {
+          state = data;
+          document.querySelector('#stage').textContent = (stageNames[data.stage] || data.stage) + (data.status === 'FINISHED' ? ' · 종료' : '');
+          document.querySelector('#connection').textContent = data.connected ? '실시간 연결됨' : '연결 대기 / 복구 중';
+          document.querySelector('#count').textContent = '연출 ' + data.momentCount + '회';
+          document.querySelector('#reads').textContent = '기록 조회 ' + data.historyReads + '회';
+          const fault = document.querySelector('#fault');
+          fault.hidden = !data.failed && !data.stale;
+          fault.className = 'issue';
+          fault.textContent = data.failed ? '조회 오류 재현 중' : data.stale ? '늦은 응답 재현 중' : '';
+        }
+      });
+      new ResizeObserver(fit).observe(document.querySelector('#screen'));
+      window.addEventListener('resize',fit);
+      fit();
+      openScene('free');
+    })();
+  </script>
+</body>
+</html>

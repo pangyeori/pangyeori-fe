@@ -40,6 +40,18 @@ test("tracks early-end proposals and clears every terminal event", () => {
   }
 });
 
+test("socket verdicts become visible without waiting for a REST replica", () => {
+  const event = parseDebateConnectionEvent(JSON.stringify({
+    debateId: "debate-1", type: "VERDICT_ISSUED", stage: "FINAL_VERDICT",
+    verdictStatus: "SUCCESS", winnerPosition: "CONS", reasoning: "최종 근거",
+    participantProsScore: 40, participantConsScore: 60,
+  }), "debate-1");
+  const data = mergeDebateHistoriesEvent(undefined, event);
+  assert.equal(data.verdicts[0].winnerPosition, "CONS");
+  assert.equal(data.verdicts[0].participantConsScore, 60);
+  assert.equal(mergeDebateHistoriesEvent(data, event).verdicts.length, 1);
+});
+
 test("rejects malformed early-end events", () => {
   const proposed = { debateId: "debate-1", type: "EARLY_END_PROPOSED", role: "HOST", expiresAt: "2026-10-25T12:00:30" };
   for (const patch of [{ role: null }, { expiresAt: null }, { expiresAt: "invalid" }, { debateId: "other" }]) {
@@ -118,7 +130,10 @@ test("verdict events accept all results and never change participant presence", 
     assert.ok(event);
     assert.equal(isDebateProgressEvent(event), true);
     assert.equal(applyDebateConnectionEvent(initialDebatePresence, event), initialDebatePresence);
-    assert.equal(mergeDebateHistoriesEvent(undefined, event), undefined, "REST supplies the verdict id and timestamp");
+    const recovered = mergeDebateHistoriesEvent(undefined, event).verdicts[0];
+    assert.equal(recovered.status, "SUCCESS");
+    assert.equal(recovered.winnerPosition, event.winnerPosition);
+    assert.equal(recovered.createdAt, "", "the socket must not invent a persisted timestamp");
   }
   const failed = { debateId: "debate-1", type: "VERDICT_ISSUED", stage: "VERDICT_1", verdictStatus: "FAILED", winnerPosition: null, reasoning: null };
   assert.ok(parseDebateConnectionEvent(JSON.stringify(failed), "debate-1"));

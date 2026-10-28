@@ -242,7 +242,13 @@ export function useDebatePresence(debateId: string, enabled: boolean) {
       settleEarlyEnd("연결이 끊겨 처리 결과를 확인하지 못했습니다. 재연결 후 상태를 확인해주세요.");
       connectionRevision += 1;
       clearLeaveTimers();
-      setPresence(initialDebatePresence);
+      setPresence(current => ({
+        ...current,
+        roles: {
+          HOST: current.roles.HOST === "entered" ? "reconnecting" : current.roles.HOST,
+          GUEST: current.roles.GUEST === "entered" ? "reconnecting" : current.roles.GUEST,
+        },
+      }));
       setConnectionStatus("reconnecting");
     };
 
