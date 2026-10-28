@@ -174,7 +174,8 @@ try {
   assert.equal(await evaluate("document.querySelector('#debate-statement').maxLength"), 500);
   assert.equal(await evaluate("window.chatSockets.filter(s => s.readyState === 1).length"), 1, "one socket for presence and chat");
   await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent.includes('이전 대화 더 보기')).click()");
-  await until(contains("이전 대화 조회 오류 원문"));
+  await until(contains("읽고 있던 대화는 그대로 있어요."));
+  assert.equal(await evaluate(contains("이전 대화 조회 오류 원문")), false);
   await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent.includes('대화 다시 불러오기')).click()");
   await until(contains("이전 대화 1"));
   await enter("   ");
@@ -200,7 +201,8 @@ try {
   await evaluate("window.rejectNext = true");
   await enter("실패 시 보존할 메시지");
   await send();
-  await until(contains("서버에서 보낸 오류 원문입니다."));
+  await until(contains("작성한 내용은 그대로 남아 있어요."));
+  assert.equal(await evaluate("document.querySelector('[role=alert]')"), null);
   assert.equal(await evaluate("document.querySelector('#debate-statement').value"), "실패 시 보존할 메시지");
   await send();
   await until("document.querySelector('#debate-statement').value === ''");
@@ -210,7 +212,7 @@ try {
   await send();
   await until("document.querySelector('#debate-statement').disabled");
   await evaluate("window.chatSocket.close()");
-  await until(contains("연결이 끊겨 전송 결과를 확인하지 못했습니다."));
+  await until(contains("대화 내역을 확인한 뒤 다시 보내주세요."));
   messages.push(...Array.from({ length: 70 }, (_, i) => message(3000 + i, `오프라인 대화 ${i}`, "GUEST")));
   await until("!document.querySelector('#debate-statement').disabled");
   await until(contains("오프라인 대화 69"));

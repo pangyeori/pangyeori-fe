@@ -1,10 +1,11 @@
 import { SiteHeader } from "@/components/layout/SiteHeader";
+import styles from "./DebateRoom.module.css";
 
 export function DebateMessagesSkeleton({ label = "발언 내역 불러오는 중" }: { label?: string }) {
   return (
     <div className="space-y-5 motion-safe:animate-pulse" aria-label={label} aria-busy="true" role="status">
       <div className="flex items-start gap-2">
-        <div className="h-12 w-12 shrink-0 rounded-full bg-slate-100" />
+        <div className="h-8 w-8 shrink-0 rounded-full bg-slate-100" />
         <div className="w-3/5 space-y-2">
           <div className="h-3 w-24 rounded bg-slate-100" />
           <div className="h-20 rounded-2xl rounded-bl-md bg-slate-100" />
@@ -12,7 +13,7 @@ export function DebateMessagesSkeleton({ label = "발언 내역 불러오는 중
       </div>
       <div className="ml-auto h-20 w-3/5 rounded-2xl rounded-br-md bg-slate-200" />
       <div className="flex items-start gap-2">
-        <div className="h-12 w-12 shrink-0 rounded-full bg-slate-100" />
+        <div className="h-8 w-8 shrink-0 rounded-full bg-slate-100" />
         <div className="h-24 w-4/5 rounded-2xl rounded-bl-md bg-slate-100" />
       </div>
     </div>
@@ -21,44 +22,27 @@ export function DebateMessagesSkeleton({ label = "발언 내역 불러오는 중
 
 export function DebateRoomSkeleton() {
   return (
-    <div className="flex min-h-full flex-1 flex-col bg-[var(--page-bg)]">
+    <div className={styles.shell}>
       <SiteHeader />
-      <main
-        aria-label="토론방 정보를 불러오는 중"
-        aria-busy="true"
-        className="mx-auto w-full max-w-6xl flex-1 px-5 py-12 sm:px-8 sm:py-16"
-      >
-        <div className="motion-safe:animate-pulse">
-          <div className="mx-auto h-9 w-64 max-w-full rounded-lg bg-slate-200" />
-          <div className="mx-auto mt-4 h-4 w-80 max-w-full rounded bg-slate-100" />
-          <div className="mt-12 grid items-start gap-6 lg:grid-cols-[270px_1fr]">
-            <div className="rounded-2xl border border-[var(--line)] bg-white p-6">
-              <div className="h-5 w-24 rounded bg-slate-200" />
-              <div className="mt-5 space-y-3">
-                {[1, 2, 3].map((step) => (
-                  <div key={step} className="flex items-center gap-3 rounded-xl bg-slate-50 p-4">
-                    <div className="h-8 w-8 shrink-0 rounded-lg bg-slate-200" />
-                    <div className="flex-1 space-y-2">
-                      <div className="h-4 w-24 rounded bg-slate-200" />
-                      <div className="h-3 w-36 max-w-full rounded bg-slate-100" />
-                    </div>
-                  </div>
-                ))}
-              </div>
+      <main className={styles.main} aria-label="토론방 정보를 불러오는 중" aria-busy="true">
+        <div className={styles.heading}>
+          <div className="h-10 w-10 shrink-0 rounded-lg bg-slate-100 motion-safe:animate-pulse" />
+          <div className="h-6 w-3/5 rounded-lg bg-slate-200 motion-safe:animate-pulse" />
+        </div>
+        <div className={styles.mobileStatus}><div className="h-8 w-32 rounded bg-slate-100 motion-safe:animate-pulse" /></div>
+        <div className={styles.grid}>
+          <aside className={styles.participantPanel}>
+            <h2>참여자</h2>
+            <div className="grid grid-cols-2 gap-3 p-3 min-[1200px]:grid-cols-1">
+              {[0, 1].map((key) => <div key={key} className="flex items-center gap-2 rounded-xl bg-slate-50 p-3 motion-safe:animate-pulse"><div className="size-8 shrink-0 rounded-full bg-slate-200" /><div className="h-4 w-16 rounded bg-slate-200" /></div>)}
             </div>
-            <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-white">
-              <div className="border-b border-[var(--line)] p-6 sm:p-8">
-                <div className="h-5 w-28 rounded-full bg-slate-100" />
-                <div className="mt-5 h-7 w-3/4 rounded bg-slate-200" />
-                <div className="mt-3 h-4 w-1/2 rounded bg-slate-100" />
-              </div>
-              <div className="grid gap-3 p-6 sm:grid-cols-2 sm:p-8">
-                <div className="h-32 rounded-2xl bg-slate-100" />
-                <div className="h-32 rounded-2xl bg-slate-100" />
-                <div className="mt-4 h-12 rounded-xl bg-slate-200 sm:col-span-2" />
-              </div>
-            </div>
-          </div>
+          </aside>
+          <section className={styles.chat}>
+            <div className={styles.chatHeading}><h2>토론 발언</h2></div>
+            <div className={styles.messages}><DebateMessagesSkeleton /></div>
+            <div className={styles.composer}><div className="h-14 rounded-2xl bg-slate-100 motion-safe:animate-pulse" /></div>
+          </section>
+          <aside className={styles.progressAside}><section><h2>진행 단계</h2><div className="mt-4 h-80 rounded-xl bg-slate-100 motion-safe:animate-pulse" /></section></aside>
         </div>
       </main>
     </div>

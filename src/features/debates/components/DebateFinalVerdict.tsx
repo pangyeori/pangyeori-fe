@@ -7,6 +7,8 @@ import { type ReactNode, useEffect, useState } from "react";
 import type { DebateVerdict, Position } from "@/features/debates/api/debates";
 import { DebateMessagesSkeleton } from "@/features/debates/components/DebateRoomSkeleton";
 import { debateOutcome } from "@/features/debates/debateList";
+import { validFinalScores } from "../debatePresentation";
+import styles from "./DebateRoom.module.css";
 
 const scoreFormatter = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 1 });
 
@@ -23,14 +25,23 @@ const debateQuotes = [
   { text: "나와 다른 생각을 가진 사람의 말을 끝까지 듣는 것은, 그 사람의 의견에 동의해서가 아니라 그 사람을 존중하기 때문이다.", author: "신동엽" },
 ];
 
-export function DebateFinalVerdict({ title, verdict, myPosition, isLoading, children }: {
+export function DebateFinalVerdict({ title, verdict, myPosition, isLoading, unavailable, children }: {
   title: string;
   verdict: DebateVerdict | undefined;
   myPosition: Position | undefined;
   isLoading: boolean;
+  unavailable?: string;
   children?: ReactNode;
 }) {
   if (isLoading) return <DebateFinalVerdictSkeleton />;
+
+  if (!verdict && unavailable) return <main className="mx-auto w-full max-w-4xl flex-1 space-y-6 px-4 py-12 sm:px-8">
+    <section className="rounded-3xl border border-[var(--line)] bg-white px-6 py-12 text-center">
+      <h1 className="text-xl font-bold">토론 기록을 확인해주세요</h1>
+      <p className="mt-4 text-sm text-[var(--ink-muted)]" role="status">{unavailable}</p>
+      <Link href="/mypage" className="mt-6 inline-block min-h-11 text-sm underline">내 토론으로 돌아가기</Link>
+    </section>{children}
+  </main>;
 
   if (!verdict) {
     return (
@@ -44,7 +55,7 @@ export function DebateFinalVerdict({ title, verdict, myPosition, isLoading, chil
           <p className="mt-4 text-sm leading-6 text-[var(--ink-muted)]">
             입론부터 자유 토론까지 전체 내용을 종합하고 있습니다.<br className="hidden sm:block" /> 판결이 완료되면 결과가 자동으로 표시됩니다.
           </p>
-          <SimulatedProgress />
+          <FinalVerdictWaiting />
           <RotatingDebateQuote />
         </section>
         {children}
@@ -55,11 +66,7 @@ export function DebateFinalVerdict({ title, verdict, myPosition, isLoading, chil
   const participantProsScore = verdict.participantProsScore;
   const participantConsScore = verdict.participantConsScore;
   const reasoning = verdict.reasoning?.trim();
-  const failed = verdict.status === "FAILED"
-    || participantProsScore === null
-    || participantConsScore === null
-    || verdict.winnerPosition === null
-    || !reasoning;
+  const failed = verdict.status === "FAILED";
 
   if (failed) {
     return (
@@ -68,8 +75,8 @@ export function DebateFinalVerdict({ title, verdict, myPosition, isLoading, chil
           <span className="mx-auto flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-slate-50 ring-1 ring-[var(--line)]">
             <Image src="/images/mascot/owl-holding-star.png" alt="" width={80} height={80} />
           </span>
-          <p className="mt-6 text-sm font-bold text-[var(--danger)]">최종 판결 실패</p>
-          <h1 className="mt-2 text-2xl font-bold text-[var(--ink)]">최종 판결을 완료하지 못했습니다</h1>
+          <p className="mt-6 text-sm font-bold text-[var(--ink-muted)]">최종 판결 안내</p>
+          <h1 className="mt-2 text-2xl font-bold text-[var(--ink)]">이번 토론의 판결은 제공되지 않았습니다</h1>
           <p className="mt-3 text-sm leading-6 text-[var(--ink-muted)]">토론 기록은 보존되며 마이페이지에서 다시 확인할 수 있습니다.</p>
           <Link href="/mypage" className="mt-8 inline-flex h-12 items-center justify-center rounded-lg bg-[var(--btn-primary)] px-6 text-[15px] font-semibold text-white hover:bg-[var(--btn-primary-hover)]">
             내 토론으로 돌아가기
@@ -80,15 +87,17 @@ export function DebateFinalVerdict({ title, verdict, myPosition, isLoading, chil
     );
   }
 
-  const prosScore = Math.min(100, Math.max(0, participantProsScore));
-  const consScore = Math.min(100, Math.max(0, participantConsScore));
+  const scoresAvailable = validFinalScores(verdict);
+  const prosScore = scoresAvailable ? participantProsScore! : null;
+  const consScore = scoresAvailable ? participantConsScore! : null;
   const winnerLabel = verdict.winnerPosition === "PROS"
     ? "찬성 측 승리"
-    : verdict.winnerPosition === "CONS" ? "반대 측 승리" : "무승부";
-  const outcome = myPosition ? debateOutcome(myPosition, verdict.winnerPosition) : null;
+    : verdict.winnerPosition === "CONS" ? "반대 측 승리" : verdict.winnerPosition === "DRAW" ? "무승부" : "판결 결과 확인 중";
+  const winnerKnown = verdict.winnerPosition === "PROS" || verdict.winnerPosition === "CONS" || verdict.winnerPosition === "DRAW";
+  const outcome = myPosition && winnerKnown ? debateOutcome(myPosition, verdict.winnerPosition) : null;
   const myResult = outcome === "승리"
     ? "토론에서 승리했습니다"
-    : outcome === "패배" ? "토론에서 패배했습니다" : outcome === "무승부" ? "토론 결과는 무승부입니다" : "토론 결과가 확정되었습니다";
+    : outcome === "패배" ? "토론에서 패배했습니다" : outcome === "무승부" ? "토론 결과는 무승부입니다" : winnerKnown ? "토론 결과가 확정되었습니다" : "최종 판결 결과를 확인하고 있습니다";
 
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 space-y-6 px-4 py-8 sm:px-8 sm:py-12">
@@ -106,10 +115,13 @@ export function DebateFinalVerdict({ title, verdict, myPosition, isLoading, chil
             <span className="text-2xl font-bold text-[var(--ink-faint)]" aria-hidden>:</span>
             <Score position="CONS" score={consScore} mine={myPosition === "CONS"} />
           </div>
-          <div className="mt-5 flex h-4 overflow-hidden rounded-full bg-slate-100" aria-label={`찬성 ${scoreFormatter.format(prosScore)}점, 반대 ${scoreFormatter.format(consScore)}점`}>
-            <span className="h-full bg-blue-500" style={{ width: `${prosScore}%` }} />
-            <span className="h-full bg-rose-500" style={{ width: `${consScore}%` }} />
-          </div>
+          <p className="mt-3 text-center text-xs text-[var(--ink-muted)]">{scoresAvailable ? "AI 평가 점수 · 승률을 의미하지 않습니다." : "평가 점수를 정리하고 있어요."}</p>
+          {prosScore !== null && consScore !== null && Math.abs(prosScore + consScore - 100) < 0.01 ? (
+            <div className="mt-5 flex h-3 overflow-hidden rounded-full bg-slate-100" role="img" aria-label={`AI 평가 점수: 찬성 ${scoreFormatter.format(prosScore)}점, 반대 ${scoreFormatter.format(consScore)}점`}>
+              <span className="h-full bg-blue-500" style={{ width: `${prosScore}%` }} />
+              <span className="h-full bg-rose-500" style={{ width: `${consScore}%` }} />
+            </div>
+          ) : null}
 
           <article className="mt-8 rounded-2xl bg-[var(--surface-muted)] p-5 sm:p-6">
             <div className="flex items-center gap-3">
@@ -121,7 +133,7 @@ export function DebateFinalVerdict({ title, verdict, myPosition, isLoading, chil
                 <h2 className="mt-1 font-bold text-[var(--ink)]">최종 판결 근거</h2>
               </div>
             </div>
-            <p className="mt-5 whitespace-pre-wrap break-words text-sm leading-7 text-[var(--ink)]">{reasoning}</p>
+            {reasoning ? <p className="mt-5 whitespace-pre-wrap [overflow-wrap:anywhere] text-sm leading-7 text-[var(--ink)]">{reasoning}</p> : <div className="mt-5 space-y-3" aria-label="판결 근거를 불러오는 중" aria-busy="true"><div className={styles.reasonSkeleton} /><div className={`${styles.reasonSkeleton} w-4/5`} /><div className={`${styles.reasonSkeleton} w-3/5`} /></div>}
           </article>
 
           <div className="mt-8 flex justify-center">
@@ -136,29 +148,16 @@ export function DebateFinalVerdict({ title, verdict, myPosition, isLoading, chil
   );
 }
 
-function SimulatedProgress() {
-  const [progress, setProgress] = useState(8);
-
+function FinalVerdictWaiting() {
+  const [delayed, setDelayed] = useState(false);
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      setProgress((current) => {
-        const step = current < 90
-          ? 0.2 + Math.random() * 2.8
-          : 0.01 + Math.random() * 0.04;
-        return Math.min(98, current + step);
-      });
-    }, 180);
-    return () => window.clearInterval(timer);
+    const timer = window.setTimeout(() => setDelayed(true), 30000);
+    return () => window.clearTimeout(timer);
   }, []);
-
-  return (
-    <div className="mx-auto mt-8 h-2 w-full max-w-sm overflow-hidden rounded-full bg-slate-100" role="status" aria-label="최종 판결 준비 중">
-      <span
-        className="block h-full rounded-full bg-[var(--brand-blue)] transition-[width] duration-300 ease-linear"
-        style={{ width: `${progress}%` }}
-      />
-    </div>
-  );
+  return <div className="mt-7 text-sm text-[var(--ink-muted)]">
+    <div className={styles.verdictLoading} role="progressbar" aria-label="최종 판결 분석 중"><span /></div>
+    <p role="status" className="mt-4">{delayed ? "분석이 길어지고 있어요. 결과가 도착하면 자동으로 표시됩니다." : "AI 분석 결과를 기다리고 있어요."}</p>
+  </div>;
 }
 
 function RotatingDebateQuote() {
@@ -219,7 +218,7 @@ export function DebateFinalVerdictSkeleton() {
   );
 }
 
-function Score({ position, score, mine }: { position: Position; score: number; mine: boolean }) {
+function Score({ position, score, mine }: { position: Position; score: number | null; mine: boolean }) {
   const pros = position === "PROS";
   return (
     <div className={`rounded-2xl border p-4 text-center ${pros ? "border-blue-100 bg-blue-50" : "border-rose-100 bg-rose-50"}`}>
@@ -228,7 +227,7 @@ function Score({ position, score, mine }: { position: Position; score: number; m
         {mine ? <span className="rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold text-[var(--ink-muted)]">나</span> : null}
       </div>
       <p className={`mt-2 text-3xl font-bold sm:text-4xl ${pros ? "text-blue-700" : "text-rose-700"}`}>
-        {scoreFormatter.format(score)}<span className="ml-1 text-base"></span>
+        {score === null ? <span className={styles.scoreSkeleton} aria-label="평가 점수를 불러오는 중" aria-busy="true" /> : <>{scoreFormatter.format(score)}<span className="ml-1 text-base">점</span></>}
       </p>
     </div>
   );
