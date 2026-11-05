@@ -205,6 +205,22 @@ export function mergeDebateHistoriesEvent(
   data: DebateHistories | undefined,
   event: DebateConnectionEvent,
 ): DebateHistories | undefined {
+  if (event.type === "VERDICT_ISSUED" && event.stage && event.verdictStatus) {
+    const existing = data?.verdicts.find(item => item.stage === event.stage);
+    return {
+      histories: data?.histories ?? [],
+      verdicts: [...(data?.verdicts ?? []).filter(item => item.stage !== event.stage), {
+        id: existing?.id ?? `realtime-${event.stage}`,
+        stage: event.stage,
+        status: event.verdictStatus,
+        winnerPosition: event.winnerPosition ?? null,
+        reasoning: event.reasoning ?? null,
+        participantProsScore: event.participantProsScore ?? null,
+        participantConsScore: event.participantConsScore ?? null,
+        createdAt: existing?.createdAt ?? "",
+      }],
+    };
+  }
   const histories = mergeDebateHistoryEvent(data?.histories, event);
   if (!histories || histories === data?.histories) return data;
   return { histories, verdicts: data?.verdicts ?? [] };

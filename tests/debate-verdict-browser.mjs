@@ -122,11 +122,10 @@ try {
   assert.equal(await evaluate("document.querySelector('#debate-statement').disabled"), true);
   const readsWhilePending = historyGets;
   await pause(3500);
-  assert.equal(historyGets, readsWhilePending, "pending verdict does not poll histories");
-  assert.equal(await evaluate("document.body.innerText.includes('결과 다시 확인')"), false, "retry stays hidden during the first five minutes");
+  assert.ok(historyGets > readsWhilePending, "pending verdict recovers automatically when the socket is unavailable");
+  assert.equal(await evaluate("document.body.innerText.includes('결과 다시 확인')"), false, "pending verdict has no manual recheck action");
   data.verdicts.push({ id: "verdict-1", stage: "VERDICT_1", status: "SUCCESS", winnerPosition: "PROS", reasoning: "찬성 측이 구체적인 근거를 제시했습니다.", createdAt: new Date().toISOString() });
   debate.currentStage = "REBUTTAL_PROS";
-  await call("Page.reload");
   await until("document.body?.innerText.includes('찬성 측 우세')");
   assert.equal(await evaluate("document.querySelector('#debate-statement').disabled"), false);
   const readsAfterResult = historyGets;
@@ -139,7 +138,7 @@ try {
   await until("document.body?.innerText.includes('무승부')");
   data.verdicts[0] = { ...data.verdicts[0], status: "FAILED", winnerPosition: null, reasoning: null };
   await call("Page.reload");
-  await until("document.body?.innerText.includes('AI 판결을 완료하지 못했습니다')");
+  await until("document.body?.innerText.includes('이번 중간 판결은 제공되지 않았습니다')");
   debate.currentStage = "FREE";
   debate.turnEndsAt = new Date(Date.now() + 4000).toISOString();
   await call("Page.reload");
@@ -162,8 +161,8 @@ try {
   await call("Page.reload");
   await until("document.body?.innerText.includes('찬성 측 승리')");
   assert.equal(await evaluate("document.body.innerText.includes('토론에서 승리했습니다')"), true);
-  assert.equal(await evaluate("document.body.innerText.includes('62.5점')"), false, "final verdict hides scores");
-  assert.equal(await evaluate("document.body.innerText.includes('37.5점')"), false, "final verdict hides scores");
+  assert.equal(await evaluate("document.body.innerText.includes('62.5점')"), true, "final verdict labels server scores as points");
+  assert.equal(await evaluate("document.body.innerText.includes('37.5점')"), true, "final verdict labels server scores as points");
   assert.equal(await evaluate("document.body.innerText.includes('최종 판결 근거')"), true);
   assert.equal(await evaluate("document.body.innerText.includes('지난 토론 내용')"), true);
   assert.equal(await evaluate("document.body.innerText.includes('자유 토론 찬성 발언')"), true);

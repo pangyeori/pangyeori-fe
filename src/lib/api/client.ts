@@ -40,12 +40,12 @@ export function apiUrl(path: string) {
 }
 
 export function sseUrl(path: string) {
-  const base = process.env.NEXT_PUBLIC_SSE_BASE_URL ?? "";
+  const base = process.env.NEXT_PUBLIC_SSE_BASE_URL || "http://localhost:8080";
   return `${base.replace(/\/$/, "")}${path}`;
 }
 
 export function websocketUrl(path: string) {
-  const base = process.env.NEXT_PUBLIC_WS_BASE_URL ?? process.env.NEXT_PUBLIC_SSE_BASE_URL ?? window.location.origin;
+  const base = process.env.NEXT_PUBLIC_WS_BASE_URL || process.env.NEXT_PUBLIC_SSE_BASE_URL || "http://localhost:8080";
   return `${base.replace(/^http/, "ws").replace(/\/$/, "")}${path}`;
 }
 

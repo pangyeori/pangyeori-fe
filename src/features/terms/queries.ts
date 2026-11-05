@@ -2,9 +2,9 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { getPendingTerms } from "@/features/terms/api";
 
-export function pendingTermsQueryOptions(accessToken: string) {
+export function pendingTermsQueryOptions(accessToken: string, sessionKey = accessToken) {
   return queryOptions({
-    queryKey: ["terms", "pending", accessToken],
+    queryKey: ["terms", "pending", sessionKey],
     queryFn: () => getPendingTerms(accessToken),
     // Let the consent gate reuse the result prepared during sign-in.
     staleTime: 30_000,

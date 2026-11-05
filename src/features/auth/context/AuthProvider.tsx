@@ -12,10 +12,12 @@ import {
 } from "react";
 
 import { refreshAccessToken } from "@/features/auth/api/refresh";
+import { isSessionRejected, sessionRetryDelay } from "@/features/auth/sessionRecovery";
 import type { SignInResponse } from "@/types/auth";
 
 type AuthSnapshot = {
   accessToken: string | null;
+  sessionKey: string | null;
   tokenType: string;
   accessTokenExpiresAt: number | null;
 };
@@ -31,6 +33,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 const EMPTY_SESSION: AuthSnapshot = {
   accessToken: null,
+  sessionKey: null,
   tokenType: "Bearer",
   accessTokenExpiresAt: null,
 };
@@ -55,15 +58,20 @@ function getAccessTokenExpiresAt(accessToken: string) {
       "=",
     );
     const decoded = JSON.parse(atob(padded)) as { exp?: unknown };
-    return typeof decoded.exp === "number" ? decoded.exp * 1000 : null;
+    return typeof decoded.exp === "number" && Number.isFinite(decoded.exp) ? decoded.exp * 1000 : null;
   } catch {
     return null;
   }
 }
 
 function toSnapshot(session: SignInResponse): AuthSnapshot {
+  if (!session || typeof session.accessToken !== "string" || !session.accessToken.trim()
+    || typeof session.tokenType !== "string" || !session.tokenType.trim()) {
+    throw new Error("로그인 정보를 확인하지 못했습니다.");
+  }
   return {
     accessToken: session.accessToken,
+    sessionKey: session.accessToken,
     tokenType: session.tokenType,
     accessTokenExpiresAt: getAccessTokenExpiresAt(session.accessToken),
   };
@@ -72,28 +80,31 @@ function toSnapshot(session: SignInResponse): AuthSnapshot {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [snapshot, setSnapshot] = useState<AuthSnapshot>(EMPTY_SESSION);
   const [isReady, setIsReady] = useState(false);
-  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sessionRevision = useRef(0);
 
   const setSession = useCallback((session: SignInResponse) => {
-    setSnapshot(toSnapshot(session));
+    const next = toSnapshot(session);
+    sessionRevision.current += 1;
+    setSnapshot(next);
+    setIsReady(true);
   }, []);
 
   const clearAuth = useCallback(() => {
+    sessionRevision.current += 1;
     setSnapshot(EMPTY_SESSION);
+    setIsReady(true);
   }, []);
 
   useEffect(() => {
     let active = true;
+    const revision = sessionRevision.current;
 
     requestBootstrapSession()
       .then((session) => {
-        if (active) setSession(session);
+        if (active && revision === sessionRevision.current) setSession(session);
       })
       .catch(() => {
-        if (active) clearAuth();
-      })
-      .finally(() => {
-        if (active) setIsReady(true);
+        if (active && revision === sessionRevision.current) clearAuth();
       });
 
     return () => {
@@ -102,22 +113,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [clearAuth, setSession]);
 
   useEffect(() => {
-    if (refreshTimer.current) clearTimeout(refreshTimer.current);
-    if (!snapshot.accessTokenExpiresAt) return;
+    const expiresAt = snapshot.accessTokenExpiresAt;
+    if (!expiresAt) return;
+    let active = true;
+    let failures = 0;
+    const revision = sessionRevision.current;
+    const isCurrent = () => active && revision === sessionRevision.current;
+    let refreshTimer: ReturnType<typeof setTimeout>;
+
+    const refresh = async () => {
+      if (!isCurrent()) return;
+      try {
+        const session = await refreshAccessToken();
+        if (!isCurrent()) return;
+        const next = toSnapshot(session);
+        // Invalidate old callbacks while retaining the signed-in session identity.
+        sessionRevision.current += 1;
+        setSnapshot(current => ({ ...next, sessionKey: current.sessionKey }));
+      } catch (error) {
+        if (!isCurrent()) return;
+        if (isSessionRejected(error) || Date.now() >= expiresAt) {
+          clearAuth();
+          return;
+        }
+        refreshTimer = setTimeout(refresh, sessionRetryDelay(failures++, expiresAt, Date.now()));
+      }
+    };
 
     const refreshIn = Math.max(
-      snapshot.accessTokenExpiresAt - Date.now() - 60_000,
-      0,
+      expiresAt - Date.now() - 60_000,
+      1000,
     );
 
-    refreshTimer.current = setTimeout(() => {
-      refreshAccessToken().then(setSession).catch(clearAuth);
-    }, refreshIn);
+    refreshTimer = setTimeout(refresh, refreshIn);
+    // A stalled request cannot keep an expired access token alive indefinitely.
+    const expiryTimer = setTimeout(() => {
+      if (isCurrent()) clearAuth();
+    }, Math.max(0, expiresAt - Date.now()));
 
     return () => {
-      if (refreshTimer.current) clearTimeout(refreshTimer.current);
+      active = false;
+      clearTimeout(refreshTimer);
+      clearTimeout(expiryTimer);
     };
-  }, [clearAuth, setSession, snapshot.accessTokenExpiresAt]);
+  }, [clearAuth, snapshot]);
 
   const value = useMemo(
     () => ({
