@@ -44,7 +44,7 @@ import { useDebatePresence } from "@/features/debates/hooks/useDebatePresence";
 import { mergeDebateHistoriesEvent, shouldNotifyEarlyEndDeclined, type DebateConnectionEvent, type DebateEarlyEndAction } from "@/features/debates/presenceEvents";
 import { awaitingVerdictStage, canSubmitStatement, nextStatementStage, shouldPollVerdicts } from "@/features/debates/debateVerdict";
 import { mergeDebateDetailSnapshot, mergeDebateHistoriesSnapshot } from "../debateRecovery";
-import { debateActionFeedback, isRecoverableReadError, readRecoveryInterval } from "../debateFeedback";
+import { debateActionFeedback, isRecoverableReadError, isUncertainDebateActionError, readRecoveryInterval } from "../debateFeedback";
 import { getProfileImageViewUrl } from "@/features/mypage/api/getMyProfile";
 import { ProfileAvatar } from "@/features/mypage/components/ProfileAvatar";
 import { useMyProfile } from "@/features/mypage/hooks/useMyProfile";
@@ -205,7 +205,8 @@ function HistoryItem({ history, hostPosition, myPosition, opponentName, opponent
 export function DebateRoom({ debateId, finalView = false }: { debateId: string; finalView?: boolean }) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { accessToken, isReady } = useAuth();
+  const { accessToken, sessionKey, isReady } = useAuth();
+  const sessionCacheKey = sessionKey ?? accessToken;
   const [content, setContent] = useState("");
   const [scheduledContent, setScheduledContent] = useState("");
   const [submitError, setSubmitError] = useState("");
@@ -219,7 +220,7 @@ export function DebateRoom({ debateId, finalView = false }: { debateId: string; 
   const [earlyEndDeclinedOpen, setEarlyEndDeclinedOpen] = useState(false);
 
   const debateQuery = useQuery({
-    queryKey: ["debates", debateId, "detail", accessToken],
+    queryKey: ["debates", debateId, "detail", sessionCacheKey],
     queryFn: () => getDebate(debateId, accessToken!),
     enabled: isReady && Boolean(accessToken),
     retry: false,
@@ -236,7 +237,7 @@ export function DebateRoom({ debateId, finalView = false }: { debateId: string; 
     || debateQuery.data?.status === "FINISHED";
   const realtimeEnabled = debateQuery.data?.status === "READY" || debateQuery.data?.status === "IN_PROGRESS";
   const historiesQuery = useQuery({
-    queryKey: ["debates", debateId, "histories", accessToken],
+    queryKey: ["debates", debateId, "histories", sessionCacheKey],
     queryFn: () => getDebateHistories(debateId, accessToken!),
     enabled: Boolean(accessToken && entryAllowed),
     retry: false,
@@ -246,7 +247,7 @@ export function DebateRoom({ debateId, finalView = false }: { debateId: string; 
     structuralSharing: (current, incoming) => mergeDebateHistoriesSnapshot(current as DebateHistories | undefined, incoming as DebateHistories),
   });
   const memberQuery = useQuery({
-    queryKey: ["debates", debateId, "member", accessToken],
+    queryKey: ["debates", debateId, "member", sessionCacheKey],
     queryFn: () => getMyDebate(debateId, accessToken!),
     enabled: Boolean(accessToken && entryAllowed),
     staleTime: 60_000,
@@ -264,7 +265,7 @@ export function DebateRoom({ debateId, finalView = false }: { debateId: string; 
   const freeMessagesEnabled = Boolean(accessToken && entryAllowed
     && (debateQuery.data?.currentStage === "FREE" || debateQuery.data?.currentStage === "FINAL_VERDICT"));
   const freeMessagesQuery = useInfiniteQuery({
-    queryKey: ["debates", debateId, "free-messages", accessToken],
+    queryKey: ["debates", debateId, "free-messages", sessionCacheKey],
     initialPageParam: null as string | null,
     queryFn: ({ pageParam }) => getDebateFreeMessages(debateId, accessToken!, pageParam),
     getNextPageParam: (page) => page.hasNext ? page.nextCursor : undefined,
@@ -316,7 +317,7 @@ export function DebateRoom({ debateId, finalView = false }: { debateId: string; 
   const earlyEndMutation = useMutation({
     mutationFn: (action: DebateEarlyEndAction) => presence.sendEarlyEndAction(action),
     onError: (error) => {
-      setEarlyEndError(isRecoverableReadError(error) ? "요청 상태를 확인하고 있어요. 잠시 후 다시 확인해주세요." : error.message);
+      setEarlyEndError(isUncertainDebateActionError(error) ? "요청 상태를 확인하고 있어요. 잠시 후 다시 확인해주세요." : error.message);
       void presence.refreshEarlyEnd().catch(() => {});
     },
   });
@@ -334,7 +335,7 @@ export function DebateRoom({ debateId, finalView = false }: { debateId: string; 
     mutationFn: (statement: string) => submitDebateHistory(debateId, statement, accessToken!),
     onSuccess: (history) => {
       queryClient.setQueryData<DebateHistories>(
-        ["debates", debateId, "histories", accessToken],
+        ["debates", debateId, "histories", sessionCacheKey],
         (data) => ({
           histories: [...(data?.histories ?? []).filter((item) => item.stage !== history.stage), history],
           verdicts: data?.verdicts ?? [],
@@ -380,13 +381,13 @@ export function DebateRoom({ debateId, finalView = false }: { debateId: string; 
     if (event.debateId !== debateId) return;
     if ((event.type === "STAGE_CHANGED" || event.type === "VERDICT_ISSUED") && event.stage) {
       queryClient.setQueryData<DebateDetail>(
-        ["debates", debateId, "detail", accessToken],
+        ["debates", debateId, "detail", sessionCacheKey],
         (data) => data ? mergeDebateDetailSnapshot(data, { ...data, currentStage: event.stage!, turnEndsAt: event.turnEndsAt ?? null }) : data,
       );
     }
     if (event.type === "DEBATE_ENDED") {
       queryClient.setQueryData<DebateDetail>(
-        ["debates", debateId, "detail", accessToken],
+        ["debates", debateId, "detail", sessionCacheKey],
         (data) => data ? {
           ...data,
           status: "FINISHED",
@@ -397,11 +398,11 @@ export function DebateRoom({ debateId, finalView = false }: { debateId: string; 
       );
     }
     queryClient.setQueryData<DebateHistories>(
-      ["debates", debateId, "histories", accessToken],
+      ["debates", debateId, "histories", sessionCacheKey],
       (data) => mergeDebateHistoriesEvent(data, event),
     );
     void Promise.all([refetchDebate(), refetchHistories()]);
-  }, [accessToken, debateId, presence.latestProgressEvent, queryClient, refetchDebate, refetchHistories]);
+  }, [accessToken, debateId, presence.latestProgressEvent, queryClient, refetchDebate, refetchHistories, sessionCacheKey]);
 
   useEffect(() => {
     if (!debateQuery.data?.turnEndsAt && !presence.earlyEnd.expiresAt) return;
@@ -701,7 +702,9 @@ export function DebateRoom({ debateId, finalView = false }: { debateId: string; 
           verdict={finalVerdict}
           myPosition={myPosition}
           isLoading={historyLoading}
-          unavailable={historyNotice && !historiesQuery.data ? historiesQuery.error?.message : undefined}
+          unavailable={historyNotice ? historiesQuery.error?.message : undefined}
+          onRetry={() => void refetchHistories()}
+          isRetrying={historiesQuery.isFetching}
         >
           <section className="rounded-3xl border border-[var(--line)] bg-white p-5 shadow-[0_12px_40px_rgba(16,24,40,0.06)] sm:p-7" aria-labelledby="completed-debate-history-title">
             <div className="border-b border-[var(--line)] pb-4">

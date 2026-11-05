@@ -8,6 +8,7 @@ import type { DebateVerdict, Position } from "@/features/debates/api/debates";
 import { DebateMessagesSkeleton } from "@/features/debates/components/DebateRoomSkeleton";
 import { debateOutcome } from "@/features/debates/debateList";
 import { validFinalScores } from "../debatePresentation";
+import { isFinalVerdictComplete } from "../debateVerdict";
 import styles from "./DebateRoom.module.css";
 
 const scoreFormatter = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 1 });
@@ -25,20 +26,29 @@ const debateQuotes = [
   { text: "나와 다른 생각을 가진 사람의 말을 끝까지 듣는 것은, 그 사람의 의견에 동의해서가 아니라 그 사람을 존중하기 때문이다.", author: "신동엽" },
 ];
 
-export function DebateFinalVerdict({ title, verdict, myPosition, isLoading, unavailable, children }: {
+export function DebateFinalVerdict({ title, verdict, myPosition, isLoading, unavailable, onRetry, isRetrying, children }: {
   title: string;
   verdict: DebateVerdict | undefined;
   myPosition: Position | undefined;
   isLoading: boolean;
   unavailable?: string;
+  onRetry?: () => void;
+  isRetrying?: boolean;
   children?: ReactNode;
 }) {
   if (isLoading) return <DebateFinalVerdictSkeleton />;
 
-  if (!verdict && unavailable) return <main className="mx-auto w-full max-w-4xl flex-1 space-y-6 px-4 py-12 sm:px-8">
+  const notice = unavailable && !isFinalVerdictComplete(verdict) ? (
+    <div className="mt-4 text-sm text-[var(--ink-muted)]" role="status">
+      <p>{unavailable}</p>
+      {onRetry ? <button type="button" className="mt-3 min-h-11 underline disabled:opacity-50" disabled={isRetrying} onClick={onRetry}>{isRetrying ? "판결 조회 중…" : "판결 다시 불러오기"}</button> : null}
+    </div>
+  ) : null;
+
+  if (!verdict && notice) return <main className="mx-auto w-full max-w-4xl flex-1 space-y-6 px-4 py-12 sm:px-8">
     <section className="rounded-3xl border border-[var(--line)] bg-white px-6 py-12 text-center">
       <h1 className="text-xl font-bold">토론 기록을 확인해주세요</h1>
-      <p className="mt-4 text-sm text-[var(--ink-muted)]" role="status">{unavailable}</p>
+      {notice}
       <Link href="/mypage" className="mt-6 inline-block min-h-11 text-sm underline">내 토론으로 돌아가기</Link>
     </section>{children}
   </main>;
@@ -116,6 +126,7 @@ export function DebateFinalVerdict({ title, verdict, myPosition, isLoading, unav
             <Score position="CONS" score={consScore} mine={myPosition === "CONS"} />
           </div>
           <p className="mt-3 text-center text-xs text-[var(--ink-muted)]">{scoresAvailable ? "AI 평가 점수 · 승률을 의미하지 않습니다." : "평가 점수를 정리하고 있어요."}</p>
+          {notice}
           {prosScore !== null && consScore !== null && Math.abs(prosScore + consScore - 100) < 0.01 ? (
             <div className="mt-5 flex h-3 overflow-hidden rounded-full bg-slate-100" role="img" aria-label={`AI 평가 점수: 찬성 ${scoreFormatter.format(prosScore)}점, 반대 ${scoreFormatter.format(consScore)}점`}>
               <span className="h-full bg-blue-500" style={{ width: `${prosScore}%` }} />

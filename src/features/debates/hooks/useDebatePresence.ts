@@ -6,6 +6,7 @@ import { Client } from "@stomp/stompjs";
 import { useAuth } from "@/features/auth/context/AuthProvider";
 import { getDebateEarlyEndStatus, getDebatePresence, type DebateFreeMessage, type DebateRole } from "@/features/debates/api/debates";
 import { freeMessageError, mergeFreeMessages } from "@/features/debates/freeDebateMessages";
+import { DebateTransportError } from "@/features/debates/debateFeedback";
 import { parseServerTime } from "@/features/debates/debateProgress";
 import {
   applyDebateConnectionEvent,
@@ -57,32 +58,32 @@ export function useDebatePresence(debateId: string, enabled: boolean) {
     timer: ReturnType<typeof setTimeout>;
   } | null>(null);
 
-  const settleMessage = useCallback((error?: string) => {
+  const settleMessage = useCallback((error?: Error) => {
     const pending = pendingMessage.current;
     if (!pending) return;
     pendingMessage.current = null;
     clearTimeout(pending.timer);
-    if (error) pending.reject(new Error(error));
+    if (error) pending.reject(error);
     else pending.resolve();
   }, []);
 
-  const settleEarlyEnd = useCallback((error?: string) => {
+  const settleEarlyEnd = useCallback((error?: Error) => {
     const pending = pendingEarlyEnd.current;
     if (!pending) return;
     pendingEarlyEnd.current = null;
     clearTimeout(pending.timer);
-    if (error) pending.reject(new Error(error));
+    if (error) pending.reject(error);
     else pending.resolve();
   }, []);
 
   const sendFreeMessage = useCallback((content: string, role: DebateRole) => new Promise<void>((resolve, reject) => {
     const client = clientRef.current;
-    if (!client?.connected) return reject(new Error("채팅 연결을 확인한 뒤 다시 시도해주세요."));
+    if (!client?.connected) return reject(new DebateTransportError("채팅 연결을 확인한 뒤 다시 시도해주세요."));
     if (pendingMessage.current) return reject(new Error("이전 메시지를 전송하고 있습니다."));
     if (pendingEarlyEnd.current) return reject(new Error("조기 종료 요청을 처리하고 있습니다."));
     pendingMessage.current = {
       content, role, resolve, reject,
-      timer: setTimeout(() => settleMessage("전송 결과를 확인하지 못했습니다. 대화 내역을 확인한 뒤 다시 시도해주세요."), 10_000),
+      timer: setTimeout(() => settleMessage(new DebateTransportError("전송 결과를 확인하지 못했습니다. 대화 내역을 확인한 뒤 다시 시도해주세요.")), 10_000),
     };
     try {
       client.publish({
@@ -91,24 +92,24 @@ export function useDebatePresence(debateId: string, enabled: boolean) {
         body: JSON.stringify({ content }),
       });
     } catch {
-      settleMessage("메시지를 전송하지 못했습니다. 연결을 확인한 뒤 다시 시도해주세요.");
+      settleMessage(new DebateTransportError("메시지를 전송하지 못했습니다. 연결을 확인한 뒤 다시 시도해주세요."));
     }
   }), [debateId, settleMessage]);
 
   const sendEarlyEndAction = useCallback((action: DebateEarlyEndAction) => new Promise<void>((resolve, reject) => {
     const client = clientRef.current;
-    if (!client?.connected) return reject(new Error("토론방 연결을 확인한 뒤 다시 시도해주세요."));
+    if (!client?.connected) return reject(new DebateTransportError("토론방 연결을 확인한 뒤 다시 시도해주세요."));
     if (pendingMessage.current || pendingEarlyEnd.current) return reject(new Error("이전 요청을 처리하고 있습니다."));
     pendingEarlyEnd.current = {
       expectedType: earlyEndResult[action],
       resolve,
       reject,
-      timer: setTimeout(() => settleEarlyEnd("처리 결과를 확인하지 못했습니다. 조기 종료 상태를 다시 확인해주세요."), 10_000),
+      timer: setTimeout(() => settleEarlyEnd(new DebateTransportError("처리 결과를 확인하지 못했습니다. 조기 종료 상태를 다시 확인해주세요.")), 10_000),
     };
     try {
       client.publish({ destination: `/pub/debates/${debateId}/early-end/${action}`, body: "" });
     } catch {
-      settleEarlyEnd("요청을 전송하지 못했습니다. 연결을 확인한 뒤 다시 시도해주세요.");
+      settleEarlyEnd(new DebateTransportError("요청을 전송하지 못했습니다. 연결을 확인한 뒤 다시 시도해주세요."));
     }
   }), [debateId, settleEarlyEnd]);
 
@@ -158,7 +159,7 @@ export function useDebatePresence(debateId: string, enabled: boolean) {
       setConnectedAt(Date.now());
       client.subscribe("/user/queue/errors", ({ body }) => {
         if (!active) return;
-        const error = freeMessageError(body);
+        const error = new Error(freeMessageError(body));
         if (pendingEarlyEnd.current) settleEarlyEnd(error);
         else settleMessage(error);
       });
@@ -230,7 +231,7 @@ export function useDebatePresence(debateId: string, enabled: boolean) {
     };
     client.onStompError = ({ body }) => {
       if (!active) return;
-      const error = freeMessageError(body);
+      const error = new Error(freeMessageError(body));
       if (pendingEarlyEnd.current) settleEarlyEnd(error);
       else settleMessage(error);
       setConnectionStatus("error");
@@ -238,8 +239,8 @@ export function useDebatePresence(debateId: string, enabled: boolean) {
     client.onWebSocketError = () => active && setConnectionStatus("error");
     client.onWebSocketClose = () => {
       if (!active) return;
-      settleMessage("연결이 끊겨 전송 결과를 확인하지 못했습니다. 재연결 후 대화 내역을 확인해주세요.");
-      settleEarlyEnd("연결이 끊겨 처리 결과를 확인하지 못했습니다. 재연결 후 상태를 확인해주세요.");
+      settleMessage(new DebateTransportError("연결이 끊겨 전송 결과를 확인하지 못했습니다. 재연결 후 대화 내역을 확인해주세요."));
+      settleEarlyEnd(new DebateTransportError("연결이 끊겨 처리 결과를 확인하지 못했습니다. 재연결 후 상태를 확인해주세요."));
       connectionRevision += 1;
       clearLeaveTimers();
       setPresence(current => ({
@@ -256,8 +257,8 @@ export function useDebatePresence(debateId: string, enabled: boolean) {
     return () => {
       active = false;
       clientRef.current = null;
-      settleMessage("채팅 연결이 종료되었습니다.");
-      settleEarlyEnd("토론방 연결이 종료되었습니다.");
+      settleMessage(new DebateTransportError("채팅 연결이 종료되었습니다."));
+      settleEarlyEnd(new DebateTransportError("토론방 연결이 종료되었습니다."));
       clearLeaveTimers();
       void client.deactivate();
     };

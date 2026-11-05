@@ -1,4 +1,4 @@
-import type { DebateHistories, DebateStage, Position } from "@/features/debates/api/debates";
+import type { DebateHistories, DebateStage, DebateVerdict, Position } from "@/features/debates/api/debates";
 
 const statementStages: DebateStage[] = [
   "OPENING_PROS",
@@ -40,22 +40,24 @@ export function awaitingVerdictStage(
   return null;
 }
 
+export function isFinalVerdictComplete(final: DebateVerdict | undefined) {
+  if (!final || final.stage !== "FINAL_VERDICT") return false;
+  if (final.status === "FAILED") return true;
+  const pros = final.participantProsScore;
+  const cons = final.participantConsScore;
+  return final.status === "SUCCESS" && Boolean(final.reasoning?.trim())
+    && typeof pros === "number" && typeof cons === "number"
+    && Number.isFinite(pros) && Number.isFinite(cons) && pros >= 0 && cons >= 0 && pros <= 100 && cons <= 100
+    && Math.abs(pros + cons - 100) < 0.001
+    && final.winnerPosition === (pros > cons ? "PROS" : cons > pros ? "CONS" : "DRAW");
+}
+
 export function shouldPollVerdicts(stage: DebateStage, data: DebateHistories | undefined) {
   if (awaitingVerdictStage(stage, data)) return true;
-  if (stage !== "FINAL_VERDICT") {
-    const missing = (verdict: DebateStage, pros: DebateStage, cons: DebateStage) =>
-      !data?.verdicts.some(item => item.stage === verdict)
-      && Boolean(data?.histories.some(item => item.stage === pros) && data.histories.some(item => item.stage === cons));
-    // Backfill delayed old results without blocking the server's current speaking stage.
-    return missing("VERDICT_1", "OPENING_PROS", "OPENING_CONS") || missing("VERDICT_2", "REBUTTAL_PROS", "REBUTTAL_CONS");
-  }
-  const final = data?.verdicts.find(item => item.stage === "FINAL_VERDICT");
-  const pros = final?.participantProsScore;
-  const cons = final?.participantConsScore;
-  return stage === "FINAL_VERDICT" && final?.status === "SUCCESS"
-    && (!final.winnerPosition || !final.reasoning?.trim()
-      || typeof pros !== "number" || typeof cons !== "number"
-      || !Number.isFinite(pros) || !Number.isFinite(cons) || pros < 0 || cons < 0 || pros > 100 || cons > 100
-      || Math.abs(pros + cons - 100) >= 0.001
-      || final.winnerPosition !== (pros > cons ? "PROS" : cons > pros ? "CONS" : "DRAW"));
+  const missing = (verdict: DebateStage, pros: DebateStage, cons: DebateStage) =>
+    !data?.verdicts.some(item => item.stage === verdict)
+    && Boolean(data?.histories.some(item => item.stage === pros) && data.histories.some(item => item.stage === cons));
+  // Backfill delayed old results even after the final result arrives.
+  if (missing("VERDICT_1", "OPENING_PROS", "OPENING_CONS") || missing("VERDICT_2", "REBUTTAL_PROS", "REBUTTAL_CONS")) return true;
+  return stage === "FINAL_VERDICT" && !isFinalVerdictComplete(data?.verdicts.find(item => item.stage === "FINAL_VERDICT"));
 }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { awaitingVerdictStage, canSubmitStatement, isStatementStage, nextStatementStage, shouldPollVerdicts } from "./debateVerdict.ts";
+import { awaitingVerdictStage, canSubmitStatement, isFinalVerdictComplete, isStatementStage, nextStatementStage, shouldPollVerdicts } from "./debateVerdict.ts";
 
 // Fixtures model REST snapshots and missed WebSocket events; never used by product code.
 const histories = [
@@ -16,6 +16,25 @@ test("waits after both statements even if the stage event was missed", () => {
   assert.equal(awaitingVerdictStage("REBUTTAL_PROS", { histories, verdicts: [] }), null, "the current server stage wins over missing old judgments");
   assert.equal(awaitingVerdictStage("FREE", { histories, verdicts: [] }), null);
   assert.equal(shouldPollVerdicts("REBUTTAL_PROS", { histories, verdicts: [] }), true, "delayed prior verdicts still backfill in the background");
+});
+
+test("a completed final verdict still backfills missing intermediate judgments, including explicit failures", () => {
+  const final = { stage: "FINAL_VERDICT", status: "SUCCESS", winnerPosition: "PROS", reasoning: "근거", participantProsScore: 60, participantConsScore: 40 };
+  const completed = { histories: [...histories, ...["REBUTTAL_PROS", "REBUTTAL_CONS"].map(stage => ({ stage }))], verdicts: [final] };
+  for (const status of ["SUCCESS", "FAILED"]) {
+    const verdicts = [{ ...final, status }];
+    assert.equal(shouldPollVerdicts("FINAL_VERDICT", { ...completed, verdicts }), true);
+    verdicts.push({ stage: "VERDICT_1", status: "SUCCESS" });
+    assert.equal(shouldPollVerdicts("FINAL_VERDICT", { ...completed, verdicts }), true);
+    verdicts.push({ stage: "VERDICT_2", status: "FAILED" });
+    assert.equal(shouldPollVerdicts("FINAL_VERDICT", { ...completed, verdicts }), false);
+  }
+  assert.equal(isFinalVerdictComplete(final), true, "missing historical judgments do not block the final result");
+  assert.equal(isFinalVerdictComplete(undefined), false);
+  for (const change of [{ participantConsScore: null }, { reasoning: " " }, { winnerPosition: null }, { participantProsScore: 70 }, { winnerPosition: "CONS" }]) {
+    assert.equal(isFinalVerdictComplete({ ...final, ...change }), false);
+  }
+  assert.equal(isFinalVerdictComplete({ ...final, status: "FAILED", reasoning: null, winnerPosition: null }), true);
 });
 
 test("persisted success or failure ends loading even if the detail snapshot is stale", () => {

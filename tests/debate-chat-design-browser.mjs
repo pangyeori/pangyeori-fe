@@ -20,15 +20,21 @@ try {
     try { port = (await readFile(join(profile, "DevToolsActivePort"), "utf8")).split("\n")[0]; break; } catch { await pause(100); }
   }
   assert.ok(port, "Chrome started");
-  const tabs = await (await fetch(`http://127.0.0.1:${port}/json`)).json();
+  const tabs = await (await fetch(`http://127.0.0.1:${port}/json`, { signal: AbortSignal.timeout(5000) })).json();
   ws = new WebSocket(tabs.find((tab) => tab.type === "page").webSocketDebuggerUrl);
-  await new Promise((resolve) => ws.addEventListener("open", resolve, { once: true }));
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("Chrome debugger connection timed out")), 5000);
+    ws.addEventListener("open", () => { clearTimeout(timer); resolve(); }, { once: true });
+    ws.addEventListener("error", () => { clearTimeout(timer); reject(new Error("Chrome debugger connection failed")); }, { once: true });
+  });
   let id = 0;
   const pending = new Map();
   const errors = [];
   const call = (method, params = {}) => new Promise((resolve, reject) => {
-    pending.set(++id, { resolve, reject });
-    ws.send(JSON.stringify({ id, method, params }));
+    const requestId = ++id;
+    const timer = setTimeout(() => { pending.delete(requestId); reject(new Error("CDP timed out: " + method)); }, 30_000);
+    pending.set(requestId, { resolve, reject, timer });
+    ws.send(JSON.stringify({ id: requestId, method, params }));
   });
   const evaluate = async (expression) => {
     const result = await call("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true });
@@ -50,6 +56,11 @@ try {
   const histories = { histories: [], verdicts: [] };
   let failStatement = false;
   let failHistory = false;
+  let historyErrorStatus = 503;
+  let historyReads = 0;
+  let rotatingSession = false;
+  let sessionRefreshes = 0;
+  let sessionRefreshFailures = 0;
   let failDetail = false;
   let detailReads = 0;
   let staleDetail = null;
@@ -61,7 +72,8 @@ try {
   ws.addEventListener("message", ({ data: raw }) => {
     const envelope = JSON.parse(raw);
     if (pending.has(envelope.id)) {
-      const { resolve, reject } = pending.get(envelope.id);
+      const { resolve, reject, timer } = pending.get(envelope.id);
+      clearTimeout(timer);
       pending.delete(envelope.id);
       if (envelope.error) reject(envelope.error);
       else resolve(envelope.result);
@@ -74,7 +86,15 @@ try {
     requests.push(path);
     let result;
     let status = 200;
-    if (path === "/api/v1/auth/refresh") result = { accessToken: "test-session", tokenType: "Bearer" };
+    if (path === "/api/v1/auth/refresh") {
+      sessionRefreshes++;
+      if (rotatingSession) {
+        if (sessionRefreshFailures && sessionRefreshes > 1) { status = 503; sessionRefreshFailures--; }
+        const lifetime = sessionRefreshes < 3 ? 64 : 3600;
+        const payload = Buffer.from(JSON.stringify({ sub: "session-test", generation: sessionRefreshes, exp: Math.floor(Date.now() / 1000) + lifetime })).toString("base64url");
+        result = { accessToken: "x." + payload + ".x", tokenType: "Bearer" };
+      } else result = { accessToken: "test-session", tokenType: "Bearer" };
+    }
     else if (path === "/api/v1/users/me/term-agreements/pending") result = [];
     else if (path === "/api/v1/debates/free-test") {
       detailReads++;
@@ -99,7 +119,8 @@ try {
           debate.turnEndsAt = null;
         }
       } else {
-        if (failHistory) status = 503;
+        historyReads++;
+        if (failHistory) status = historyErrorStatus;
         result = staleHistories ?? histories;
       }
     } else if (path === "/api/v1/debates/free-test/free-messages") {
@@ -158,6 +179,11 @@ try {
           const payload = JSON.parse(body.replace(/\\0$/, '') || '{}');
           window.sentMessages.push({ destination: headers.destination, ...payload });
           if (headers.destination.includes('/early-end/')) {
+            if (window.rejectEarlyEndNext) {
+              window.rejectEarlyEndNext = false;
+              setTimeout(() => this.event('/user/queue/errors', { code: 'DEBATE_NOT_FREE_STAGE', message: '조기 종료 서버 오류 원문입니다.' }), 30);
+              return;
+            }
             const action = headers.destination.split('/').at(-1);
             const type = { propose: 'EARLY_END_PROPOSED', cancel: 'EARLY_END_CANCELLED', decline: 'EARLY_END_DECLINED', accept: 'EARLY_END_ACCEPTED' }[action];
             setTimeout(() => this.event('/sub/debates/free-test', { debateId: 'free-test', type, role: 'HOST', expiresAt: action === 'propose' ? new Date(Date.now() + 30000).toISOString() : null }), 30);
@@ -257,7 +283,7 @@ try {
   await until(contains("예약됨"));
   failStatement = true;
   await stage("REBUTTAL_CONS");
-  await until(contains("작성한 내용은 그대로 남아 있어요."));
+  await until(contains("이전 대화 조회 오류 원문"));
   assert.equal(await evaluate("document.querySelector('[role=alert]')"), null);
   assert.equal(statementPosts, 1, "scheduled statement sent once");
   assert.equal(await evaluate("document.querySelector('#debate-statement').value"), "예약을 취소하면 돌아오는 초안", "failed reservation restores text");
@@ -296,6 +322,9 @@ try {
   assert.ok(detailReads > readsAtFailure, "detail polling resumes automatically after an error");
   await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent.includes('조기 종료 제안')).click()");
   await until("document.querySelector('dialog[open]')");
+  await evaluate("window.rejectEarlyEndNext = true");
+  await evaluate("[...document.querySelector('dialog[open]').querySelectorAll('button')].find(b => b.textContent.trim() === '조기 종료 제안').click()");
+  await until(contains("조기 종료 서버 오류 원문입니다."));
   await evaluate("[...document.querySelector('dialog[open]').querySelectorAll('button')].find(b => b.textContent.trim() === '조기 종료 제안').click()");
   await until(contains("제안 취소"));
   await evaluate("[...document.querySelector('dialog[open]').querySelectorAll('button')].find(b => b.textContent.includes('제안 취소')).click()");
@@ -360,6 +389,62 @@ try {
   assert.equal(await evaluate(contains("결과 다시 확인")), false, "failed fetch also recovers without the removed button");
   failHistory = false;
   await until(contains("이번 토론의 판결은 제공되지 않았습니다"));
+  // Regression fixtures for PR #72: cached histories must not hide terminal read errors.
+  const savedHistories = structuredClone(histories);
+  const completedFinal = { ...savedHistories.verdicts.find(item => item.stage === "FINAL_VERDICT"), status: "SUCCESS", winnerPosition: "CONS", participantProsScore: 38, participantConsScore: 62 };
+  histories.verdicts = histories.verdicts.filter(item => item.stage !== "FINAL_VERDICT");
+  await call("Page.reload");
+  await until(contains("판겨리 AI가 토론을 분석하고 있습니다"));
+  failHistory = true;
+  historyErrorStatus = 403;
+  await until(contains("판결 다시 불러오기"));
+  assert.equal(await evaluate(contains("이전 대화 조회 오류 원문")), true);
+  assert.equal(await evaluate(contains("판겨리 AI가 토론을 분석하고 있습니다")), false, "terminal failure stops the waiting screen even with cached history");
+  assert.equal(await evaluate(contains("상대의 긴 근거입니다.")), true, "cached history remains readable");
+  const stoppedReads = historyReads;
+  await pause(3300);
+  assert.equal(historyReads, stoppedReads, "access failure stops automatic history polling");
+  failHistory = false;
+  histories.verdicts.push({ ...completedFinal });
+  await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent === '판결 다시 불러오기').click()");
+  await until(contains("62점"));
+  assert.equal(await evaluate(contains("이전 대화 조회 오류 원문")), false);
+  // An incomplete cached final result also exposes the error and can be hydrated by retry.
+  histories.verdicts.at(-1).participantConsScore = null;
+  await call("Page.reload");
+  await until(contains("평가 점수를 정리하고 있어요."));
+  failHistory = true;
+  await until(contains("판결 다시 불러오기"));
+  assert.equal(await evaluate(contains("반대 측 승리")), true, "partial result stays visible with the error");
+  failHistory = false;
+  histories.verdicts.at(-1).participantConsScore = 62;
+  await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent === '판결 다시 불러오기').click()");
+  await until(contains("62점"));
+  // No-cache terminal failure has the same recovery action.
+  failHistory = true;
+  await call("Page.reload");
+  await until(contains("판결 다시 불러오기"));
+  assert.equal(await evaluate(contains("이전 대화 조회 오류 원문")), true);
+  failHistory = false;
+  await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent === '판결 다시 불러오기').click()");
+  await until(contains("62점"));
+  // A final event may overtake the intermediate history snapshot. Backfill without hiding the final result.
+  histories.histories = ["OPENING_PROS", "OPENING_CONS", "REBUTTAL_PROS", "REBUTTAL_CONS"].map((stage, index) => ({ id: "backfill-" + index, stage, content: "기록 " + stage, createdAt: new Date().toISOString() }));
+  histories.verdicts = [{ ...completedFinal }];
+  await call("Page.reload");
+  await until(contains("62점"));
+  const readsBeforeBackfill = historyReads;
+  histories.verdicts.unshift({ ...completedFinal, id: "late-1", stage: "VERDICT_1", reasoning: "지연된 입론 판결 근거" }, { ...completedFinal, id: "late-2", stage: "VERDICT_2", reasoning: "지연된 반론 판결 근거" });
+  await until(contains("지연된 입론 판결 근거"));
+  await until(contains("지연된 반론 판결 근거"));
+  assert.ok(historyReads > readsBeforeBackfill);
+  assert.equal(await evaluate(contains("62점")), true);
+  const readsAfterBackfill = historyReads;
+  await pause(3300);
+  assert.equal(historyReads, readsAfterBackfill, "complete final and intermediate results stop polling");
+  histories.histories = savedHistories.histories;
+  histories.verdicts = savedHistories.verdicts;
+  historyErrorStatus = 503;
   // Exercise the staggered VERDICT_1 -> REBUTTAL_PROS transition in both arrival orders.
   for (const resultFirst of [true, false]) {
     debate.status = "IN_PROGRESS";
@@ -405,9 +490,37 @@ try {
   await until("document.querySelector('#debate-statement').value === '놓친 차례의 예약은 초안으로 남겨주세요'");
   assert.equal(statementPosts, postsBeforeSkippedTurn, "a skipped reservation is not submitted in a different stage");
   assert.equal(await evaluate(contains("예약됨")), false);
+  // Token rotation keeps the room DOM, draft, cached history and pending reservation.
+  rotatingSession = true;
+  sessionRefreshes = 0;
+  sessionRefreshFailures = 1;
+  debate.currentStage = "REBUTTAL_PROS";
+  debate.turnEndsAt = new Date(Date.now() + 180000).toISOString();
+  await call("Page.reload");
+  await until("document.querySelector('#debate-statement') && !document.querySelector('#debate-statement').disabled");
+  await enter("토큰 갱신 뒤에도 보존할 초안");
+  await evaluate("window.preservedComposer = document.querySelector('#debate-statement'); window.sessionScenes = []; new MutationObserver(records => records.forEach(record => record.addedNodes.forEach(node => { if (node.nodeType === 1 && node.matches('[data-debate-moment]')) window.sessionScenes.push(node.dataset.scene); }))).observe(document.body, {childList:true,subtree:true})");
+  for (let i = 0; i < 100 && sessionRefreshes < 2; i++) await pause(150);
+  assert.equal(sessionRefreshes, 2, "the first rotation fails temporarily");
+  assert.equal(await evaluate("location.pathname"), "/debates/free-test");
+  assert.equal(await evaluate("document.querySelector('#debate-statement').value"), "토큰 갱신 뒤에도 보존할 초안");
+  await evaluate("document.querySelector('button[type=submit]').click()");
+  await until(contains("예약됨"));
+  const pendingTermsReads = requests.filter(path => path === "/api/v1/users/me/term-agreements/pending").length;
+  const postsBeforeRotation = statementPosts;
+  for (let i = 0; i < 100 && sessionRefreshes < 3; i++) await pause(150);
+  assert.equal(sessionRefreshes, 3, "the scheduled retry succeeds");
+  await pause(500);
+  assert.equal(await evaluate("window.preservedComposer === document.querySelector('#debate-statement')"), true, "rotation must not remount the composer");
+  assert.equal(await evaluate(contains("예약됨")), true);
+  assert.equal(statementPosts, postsBeforeRotation, "refresh does not submit the reservation");
+  assert.equal(requests.filter(path => path === "/api/v1/users/me/term-agreements/pending").length, pendingTermsReads, "rotation reuses the verified terms result");
+  assert.deepEqual(await evaluate("window.sessionScenes"), [], "rotation does not replay turn/verdict overlays");
+  await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent.includes('취소하기')).click()");
+  await until("document.querySelector('#debate-statement').value === '토큰 갱신 뒤에도 보존할 초안'");
   assert.deepEqual(errors, []);
   assert.equal(topBefore, 0);
-  console.log("PASS: responsive layout, existing chat/compose design, reservation/cancel, intermediate/final dedup in both event orders, stale REST protection, indeterminate waiting, automatic final recovery, missing scores, early end, touch Enter, reduced motion");
+  console.log("PASS: responsive layout, existing chat/compose design, reservation/cancel, intermediate/final dedup in both event orders, stale REST protection, indeterminate waiting, automatic final recovery, missing scores, early end, touch Enter, reduced motion, session rotation/retry preserving draft and reservation");
   console.log("Screenshots: " + profile);
   await call("Browser.close");
 } finally {

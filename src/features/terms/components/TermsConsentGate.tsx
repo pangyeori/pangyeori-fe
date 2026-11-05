@@ -43,10 +43,10 @@ function PendingAgreement({ terms, token, refresh, refreshing }: {
 }
 
 export function TermsConsentGate({ children }: { children: ReactNode }) {
-  const { accessToken, isReady } = useAuth();
+  const { accessToken, sessionKey, isReady } = useAuth();
   const signOut = useSignOut();
   const pending = useQuery({
-    ...pendingTermsQueryOptions(accessToken ?? ""),
+    ...pendingTermsQueryOptions(accessToken ?? "", sessionKey ?? ""),
     enabled: isReady && Boolean(accessToken),
   });
 
@@ -66,7 +66,7 @@ export function TermsConsentGate({ children }: { children: ReactNode }) {
       <TermsQueryStatus pending={pending.isPending} error={pending.error} empty={false}
         fetching={pending.isFetching} onRetry={() => { void pending.refetch(); }} />
       {pending.isSuccess && pending.data.length > 0 ? (
-        <PendingAgreement key={accessToken} terms={pending.data} token={accessToken}
+        <PendingAgreement key={sessionKey} terms={pending.data} token={accessToken}
           refreshing={pending.isFetching} refresh={() => pending.refetch({ throwOnError: true })} />
       ) : null}
       <Button variant="outline" loading={signOut.isPending} onClick={() => signOut.mutate()}>로그아웃</Button>
